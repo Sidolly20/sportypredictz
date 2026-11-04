@@ -1,7 +1,7 @@
 {
   "name": "sportypredictz",
-  "version": "1.0.0",
-  "description": "SportyPredictz - Odds Radar",
+  "version": "2.0.0",
+  "description": "SportyPredictz - football predictions and odds radar",
   "type": "module",
   "main": "server.js",
   "scripts": {

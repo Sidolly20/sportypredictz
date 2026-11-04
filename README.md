@@ -1,22 +1,20 @@
-# SportyPredictz - Odds Radar
+# SportyPredictz
 
-Odds comparison site with a live ticker, ticket carousel, bookmaker board and value finder.
+Football predictions and odds board. Express server + plain HTML/CSS/JS.
 
-## Run locally
+The server calls your odds-api (`/v1/matches`, `/v1/matches/:id`, `/v1/live`) and keeps the
+key in an environment variable. Browsers only talk to this site's own `/api/...` routes.
 
-    npm install
-    ODDS_API_KEY=your_key_here npm start
+## Environment variables (Render)
+| Name | Needed | What |
+|---|---|---|
+| `ODDS_API_KEY_SPORTY` | yes | key from the odds-api `api_keys` table |
+| `ODDS_API_BASE` | no | defaults to https://odds-api-g6vq.onrender.com |
 
-Then open http://localhost:3000
+With no key set the site shows clearly labelled DEMO data.
 
-Without a key the site runs on demo data.
+## Render settings
+Build command `npm install`, start command `npm start`.
 
-## Deploy on Render
-
-1. Push this folder to a GitHub repository.
-2. On Render, create a new Web Service from that repo.
-3. Build command: npm install
-4. Start command: npm start
-5. Under Environment, add ODDS_API_KEY with your key.
-
-The key stays on the server and is never sent to the browser.
+## Files
+`server.js`, `index.html`, `styles.css`, `app.js`, `package.json`. Only the three web files are public.

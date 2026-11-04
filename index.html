@@ -3,63 +3,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SportyPredictz | Odds Radar</title>
-  <meta name="description" content="Live odds comparison, value finder and bookmaker board for football.">
+  <title>SportyPredictz | Football Odds Radar</title>
+  <meta name="description" content="Football predictions, 1X2 odds, over/under and BTTS in one fast board. Model probabilities for every match.">
+  <meta name="theme-color" content="#06090d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2306090d'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23b6ff3b' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23b6ff3b'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Syne:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 
-<header>
-  <div class="logo">SPORTY<b>PREDICTZ</b></div>
-  <div class="header-actions">
-    <button class="pill-btn solid" id="refresh-btn">Refresh</button>
+<div class="demo-banner" id="demoBanner" hidden>
+  <b>DEMO DATA.</b> The site is not connected to odds-api yet. Add <code>ODDS_API_KEY_SPORTY</code> on Render to see real matches.
+</div>
+
+<header class="topbar">
+  <a class="logo" href="/" aria-label="SportyPredictz home">
+    <span class="logo-mark" aria-hidden="true"></span>
+    <span>SPORTY<b>PREDICTZ</b></span>
+  </a>
+  <nav class="tabs" id="tabs" aria-label="Sections">
+    <button class="tab on" data-tab="matches">Matches</button>
+    <button class="tab" data-tab="live">Live <i class="live-dot" id="liveCount" hidden>0</i></button>
+    <button class="tab" data-tab="favs">Favourites <i class="count" id="favCount" hidden>0</i></button>
+  </nav>
+  <div class="top-right">
+    <span class="mode-badge" id="modeBadge">…</span>
+    <span class="age">18+</span>
+    <span class="clock mono" id="clock"></span>
   </div>
 </header>
 
-<div class="ticker"><div class="ticker-track" id="ticker"></div></div>
+<div class="ticker" aria-label="Live scores and next matches">
+  <div class="ticker-label" id="tickerLabel">NEXT UP</div>
+  <div class="ticker-window"><div class="ticker-track" id="ticker"></div></div>
+</div>
 
-<main class="wrap">
-  <div class="hero">
-    <div class="hero-kicker">● Live odds intelligence</div>
-    <h1><span class="outline">ODDS</span><br><span class="solid">RADAR</span></h1>
-    <p>Every bookmaker, every price, every edge. Scan the board, spot the value, and let the numbers do the talking.</p>
-    <div class="hero-meta">
-      <div class="chip">Matches <b id="stat-matches">0</b></div>
-      <div class="chip">Bookmakers <b id="stat-books">0</b></div>
-      <div class="chip">API calls left <b id="stat-quota">–</b></div>
-      <div class="chip">Mode <b id="stat-mode">Demo</b></div>
+<section class="hero">
+  <div class="hero-copy">
+    <div class="kicker"><span class="pulse"></span> Odds Radar</div>
+    <h1><span class="outline">PREDICT</span><span class="solid">SMARTER</span></h1>
+    <p>Market odds and model probabilities side by side for every match. Spot who the numbers back, build a pick slip, keep your favourites.</p>
+    <div class="hero-stats">
+      <div><b id="stMatches">0</b><span>Matches</span></div>
+      <div><b id="stLeagues">0</b><span>Leagues</span></div>
+      <div><b id="stLive">0</b><span>Live now</span></div>
     </div>
   </div>
+  <div class="hero-picks">
+    <div class="block-title">Top model picks <span class="dim" id="picksDay"></span></div>
+    <div class="picks-rail" id="picks"></div>
+  </div>
+</section>
 
-  <section class="top-section">
-    <div class="leagues" id="leagues"></div>
-    <div class="status" id="status"></div>
-    <div class="section-title">Matchday <span class="accent-mono" style="color:var(--acid)">/</span> Tickets</div>
-    <p class="section-sub">Tap a ticket to open the full bookmaker board.</p>
-    <div class="carousel" id="carousel"></div>
-  </section>
+<div class="layout">
+  <aside class="side" aria-label="Leagues">
+    <div class="block-title">Leagues</div>
+    <div class="league-list" id="leagues"></div>
+  </aside>
 
-  <section>
-    <div class="section-title">Bookmaker <span class="accent-mono" style="color:var(--sky)">/</span> Board</div>
-    <p class="section-sub" id="board-sub">Select a match to compare prices across every bookmaker.</p>
-    <div id="board"></div>
-  </section>
+  <main class="main">
+    <div class="toolbar">
+      <div class="daybar" id="days" role="tablist" aria-label="Pick a day"></div>
+      <div class="viewtoggle" id="viewToggle" role="group" aria-label="Layout">
+        <button data-view="cards" class="on">Cards</button>
+        <button data-view="table">Table</button>
+      </div>
+    </div>
+    <div class="status" id="status" role="status"></div>
+    <div class="list" id="list"></div>
+    <button class="more-btn" id="moreBtn" hidden>Load more matches</button>
+  </main>
 
-  <section>
-    <div class="section-title">Value <span class="accent-mono" style="color:var(--hot)">/</span> Finder</div>
-    <p class="section-sub">Edge = fair probability × best available price − 1. Positive means the best price beats the market average.</p>
-    <div class="value-list" id="value"></div>
-  </section>
-</main>
+  <aside class="slip" id="slip" aria-label="Pick slip">
+    <div class="slip-head">
+      <div class="block-title">Pick slip <i class="count" id="slipCount">0</i></div>
+      <button class="link-btn" id="slipClose" aria-label="Close pick slip">Close</button>
+    </div>
+    <div id="slipBody"></div>
+  </aside>
+</div>
 
-<footer>
-  <div class="logo">SPORTY<b>PREDICTZ</b></div>
-  <p>Analysis for information and entertainment only. Odds come from third-party data sources and can change at any time. Please bet responsibly, within your means, and only where legal in your region.</p>
+<button class="slip-fab" id="slipFab" hidden>
+  <span>Pick slip</span><b id="fabCount">0</b><span class="mono" id="fabOdds">0.00</span>
+</button>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Match details">
+    <button class="modal-x" id="modalX" aria-label="Close">&times;</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<footer class="foot">
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a>
+      <p>Football predictions, market odds and model probabilities in one fast board.</p>
+    </div>
+    <div class="foot-col">
+      <h5>Explore</h5>
+      <a href="#" data-go="matches">Matches</a>
+      <a href="#" data-go="live">Live scores</a>
+      <a href="#" data-go="favs">Favourites</a>
+    </div>
+    <div class="foot-col">
+      <h5>How it works</h5>
+      <span>Odds: market consensus</span>
+      <span>Model: win, goals and BTTS %</span>
+      <span>Edge: model % × odds − 1</span>
+    </div>
+    <div class="foot-col foot-safe">
+      <h5>Play safe</h5>
+      <p><b class="age-pill">18+</b> Only bet what you can afford to lose. If gambling stops being fun, take a break and seek help.</p>
+    </div>
+  </div>
+  <div class="foot-bar">
+    <p>SportyPredictz is an information site, not a bookmaker. It does not take bets. Odds come from a third-party source and can change at any time. Model probabilities are estimates, not guarantees. Bet only where it is legal.</p>
+    <span class="mono">&copy; <span id="yr"></span> SportyPredictz</span>
+  </div>
 </footer>
 
-<script src="/js/app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>
