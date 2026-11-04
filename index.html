@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SportyPredictz | Odds Radar</title>
+  <meta name="description" content="Live odds comparison, value finder and bookmaker board for football.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Syne:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">SPORTY<b>PREDICTZ</b></div>
+  <div class="header-actions">
+    <button class="pill-btn solid" id="refresh-btn">Refresh</button>
+  </div>
+</header>
+
+<div class="ticker"><div class="ticker-track" id="ticker"></div></div>
+
+<main class="wrap">
+  <div class="hero">
+    <div class="hero-kicker">● Live odds intelligence</div>
+    <h1><span class="outline">ODDS</span><br><span class="solid">RADAR</span></h1>
+    <p>Every bookmaker, every price, every edge. Scan the board, spot the value, and let the numbers do the talking.</p>
+    <div class="hero-meta">
+      <div class="chip">Matches <b id="stat-matches">0</b></div>
+      <div class="chip">Bookmakers <b id="stat-books">0</b></div>
+      <div class="chip">API calls left <b id="stat-quota">–</b></div>
+      <div class="chip">Mode <b id="stat-mode">Demo</b></div>
+    </div>
+  </div>
+
+  <section class="top-section">
+    <div class="leagues" id="leagues"></div>
+    <div class="status" id="status"></div>
+    <div class="section-title">Matchday <span class="accent-mono" style="color:var(--acid)">/</span> Tickets</div>
+    <p class="section-sub">Tap a ticket to open the full bookmaker board.</p>
+    <div class="carousel" id="carousel"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Bookmaker <span class="accent-mono" style="color:var(--sky)">/</span> Board</div>
+    <p class="section-sub" id="board-sub">Select a match to compare prices across every bookmaker.</p>
+    <div id="board"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Value <span class="accent-mono" style="color:var(--hot)">/</span> Finder</div>
+    <p class="section-sub">Edge = fair probability × best available price − 1. Positive means the best price beats the market average.</p>
+    <div class="value-list" id="value"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="logo">SPORTY<b>PREDICTZ</b></div>
+  <p>Analysis for information and entertainment only. Odds come from third-party data sources and can change at any time. Please bet responsibly, within your means, and only where legal in your region.</p>
+</footer>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
