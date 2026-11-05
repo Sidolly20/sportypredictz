@@ -192,6 +192,11 @@ app.get("/app.js", sendAsset("app.js", "application/javascript"));
 
 // anything else
 app.use(route(() => null));
+// ---------- google verification ----------
+app.get("/google5d981880ea06105d.html", (req, res) => {
+  res.type("text/html").send("google-site-verification: google5d981880ea06105d.html");
+});
+
 app.get('/google5d981880ea06105d.html', (req, res) => {
     res.send('google-site-verification: google5d981880ea06105d.html');
 });
