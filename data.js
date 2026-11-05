@@ -62,9 +62,12 @@ export async function callOddsApi(path, ttlSeconds) {
 }
 
 // ---------- the board: upcoming matches for the next few days ----------
-const board = { matches: [], updatedAt: 0, loading: null, error: null };
+const board = { matches: [], updatedAt: 0, loading: null, error: null, lastAttempt: 0, pages: 0 };
+const BOARD_WAIT_MS = Number(process.env.BOARD_WAIT_MS || 20000);
 
 async function loadBoard() {
+  board.lastAttempt = Date.now();
+  board.pages = 0;
   const start = todayKey();
   const fresh = new Map();
   let gotAny = false;
@@ -85,6 +88,7 @@ async function loadBoard() {
         const data = await callOddsApi(`/v1/matches?${q}`, 60);
         for (const raw of data.matches || []) if (raw && raw.id != null) fresh.set(Number(raw.id), normMatch(raw));
         gotAny = true;
+        board.pages++;
         // Show something as soon as the first page of a cold start arrives.
         if (!board.matches.length) {
           board.matches = [...fresh.values()].sort((a, b) => a.ts - b.ts);
@@ -92,7 +96,7 @@ async function loadBoard() {
         }
         if (!data.has_more) break;
       } catch (err) {
-        board.error = err.message;
+        board.error = err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message;
         console.error("Board load failed:", err.message);
         break;
       }
@@ -117,12 +121,15 @@ export async function getBoard() {
   const age = Date.now() - board.updatedAt;
   if (board.updatedAt && age > BOARD_TTL_MS) refreshBoard();
   if (!board.matches.length) {
-    const p = refreshBoard();
-    await Promise.race([p, new Promise((r) => setTimeout(r, 50 * 1000))]);
+    // Do not hammer odds-api: at most one fresh attempt every 20 seconds while empty.
+    const p = board.loading || (Date.now() - board.lastAttempt > 20 * 1000 ? refreshBoard() : null);
+    if (p) await Promise.race([p, new Promise((r) => setTimeout(r, BOARD_WAIT_MS))]);
   }
   const cutoff = Date.now() - 4 * 60 * 1000; // hide matches that have kicked off since the last refresh
   return { matches: board.matches.filter((m) => m.ts >= cutoff), updatedAt: board.updatedAt, error: board.error, loading: !!board.loading };
 }
+
+export const boardInfo = () => ({ matches: board.matches.length, loading: !!board.loading, pagesLoaded: board.pages, updatedAt: board.updatedAt ? new Date(board.updatedAt).toISOString() : null, error: board.error });
 
 export function startBoardLoop() {
   refreshBoard();

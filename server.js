@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError } from "./data.js";
+import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
@@ -48,11 +48,15 @@ function makeCtx(req, board, live) {
 }
 
 // Builds one page: gets the data, runs the page function, wraps it in the layout.
-function route(build, { maxAge = 60 } = {}) {
+function route(build, { maxAge = 60, needsBoard = false } = {}) {
   return async (req, res) => {
     try {
       const [board, live] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] })]);
       const ctx = makeCtx(req, board, live);
+      if (needsBoard && !board.matches.length) {
+        // No matches yet (odds-api is probably waking up). Show a friendly page that reloads itself.
+        return res.status(503).set({ "Cache-Control": "no-store", "Retry-After": "20" }).type("html").send(V.layout(ctx, V.warmingPage()));
+      }
       const pg = await build({ req, res, ctx, board, live });
       if (!pg) return send404(req, res, ctx);
       res.status(pg.status || 200).set("Cache-Control", `public, max-age=${maxAge}`).type("html").send(V.layout(ctx, pg));
@@ -81,27 +85,27 @@ const dayList = (board) => {
 };
 
 // ---------- pages ----------
-app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt })));
+app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt }), { needsBoard: true }));
 
-app.get("/football-predictions-today", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: todayKey() })));
-app.get("/football-predictions-tomorrow", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: addDays(todayKey(), 1) })));
+app.get("/football-predictions-today", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: todayKey() }), { needsBoard: true }));
+app.get("/football-predictions-tomorrow", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: addDays(todayKey(), 1) }), { needsBoard: true }));
 app.get("/football-predictions/:date", route(({ req, ctx, board }) => {
   const key = req.params.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !dayList(board).includes(key)) return null;
   return V.dayPage(ctx, { matches: board.matches, days: dayList(board), key });
-}));
+}, { needsBoard: true }));
 
-app.get("/predictions", route(({ ctx, board }) => V.hubPage(ctx, { matches: board.matches })));
+app.get("/predictions", route(({ ctx, board }) => V.hubPage(ctx, { matches: board.matches }), { needsBoard: true }));
 app.get("/predictions/:slug", route(({ req, ctx, board }) => {
   const cat = CAT_BY_SLUG[req.params.slug];
   return cat ? V.categoryPage(ctx, { cat, matches: board.matches }) : null;
-}));
+}, { needsBoard: true }));
 
 app.get("/leagues", route(({ ctx, board }) => {
   const counts = new Map();
   for (const m of board.matches) counts.set(m.league.id, (counts.get(m.league.id) || 0) + 1);
   return V.leaguesPage(ctx, { leagues: ctx.leagues, counts });
-}));
+}, { needsBoard: true }));
 app.get("/leagues/:slug", route(async ({ req, ctx, board }) => {
   const id = parseLeagueSlug(req.params.slug);
   const league = id != null ? seenLeagues.get(id) : null;
@@ -141,7 +145,7 @@ app.get("/api/live", async (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
-  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, ...status });
+  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), ...status });
 });
 
 // Debug: shows the SHAPE of a league table from odds-api (no keys, no secrets). Handy if a table looks empty.

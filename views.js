@@ -145,7 +145,7 @@ export function layout(ctx, o) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.desc)}">
-<meta name="robots" content="${robots}">
+<meta name="robots" content="${robots}">${o.refresh ? `<meta http-equiv="refresh" content="${o.refresh}">` : ""}
 <link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="${SITE_NAME}">
 <meta property="og:title" content="${esc(o.title)}"><meta property="og:description" content="${esc(o.desc)}"><meta property="og:url" content="${esc(url)}">
@@ -428,5 +428,12 @@ export function errorPage() {
   return {
     title: `Please try again | ${SITE_NAME}`, desc: "Something went wrong.", path: "/error", noindex: true, ld: [],
     body: `<div class="notfound"><h1>Data is taking a moment</h1><p>Our data source is waking up or busy. Please try again in a minute.</p><div class="btn-row"><a class="btn solid" href="/">Try again</a></div></div>`
+  };
+}
+
+export function warmingPage() {
+  return {
+    title: `Loading today's matches | ${SITE_NAME}`, desc: "Loading matches.", path: "/loading", noindex: true, refresh: 15, ld: [],
+    body: `<div class="notfound"><h1>Getting today's matches…</h1><p>Our data source is waking up. This page reloads by itself every few seconds, so just wait a moment.</p><div class="btn-row"><a class="btn solid" href="">Reload now</a></div></div>`
   };
 }

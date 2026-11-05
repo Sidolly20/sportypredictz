@@ -10,7 +10,7 @@ server.js, data.js, logic.js, content.js, views.js, demo.js, app.js, styles.css,
 | Name | Needed | What |
 |---|---|---|
 | ODDS_API_KEY_SPORTY | yes | the key for this site from your odds-api api_keys table |
-| SITE_URL | recommended | your public address, e.g. https://sportypredictz.onrender.com |
+| SITE_URL | no | only if you want to force your site address (your onrender.com link). It is worked out automatically otherwise |
 | ODDS_API_BASE | no | defaults to https://odds-api-g6vq.onrender.com |
 | SITE_TZ | no | defaults to Africa/Lagos (used to decide what "today" is) |
 | BOARD_PAGES | no | pages of 20 matches loaded per day, default 3 |
