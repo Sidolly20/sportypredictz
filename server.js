@@ -83,14 +83,8 @@ const dayList = (board) => {
   }
   return [...keys].sort();
 };
-// ---------- google verification ----------
-app.get("/google5d981880ea06105d.html", (req, res, next) => {
-  res.status(200).set({
-    "Content-Type": "text/html",
-    "Cache-Control": "no-store, no-cache, must-revalidate, private"
-  }).send("google-site-verification: google5d981880ea06105d.html");
-});
 
+// ---------- pages ----------
 app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt }), { needsBoard: true }));
 
 app.get("/football-predictions-today", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: todayKey() }), { needsBoard: true }));
@@ -198,19 +192,6 @@ app.get("/app.js", sendAsset("app.js", "application/javascript"));
 
 // anything else
 app.use(route(() => null));
-app.get("/google5d981880ea06105d.html", (req, res) => {
-  res.type("text/html").send("google-site-verification: google5d981880ea06105d.html");
-});
-
-// ---------- google verification ----------
-app.get("/google5d981880ea06105d.html", (req, res, next) => {
-  res.status(200).set({
-    "Content-Type": "text/html",
-    "Cache-Control": "no-store, no-cache, must-revalidate, private"
-  }).send("google-site-verification: google5d981880ea06105d.html");
-});
-
-});
 
 app.listen(PORT, () => {
   console.log(`SportyPredictz running on port ${PORT}`);
