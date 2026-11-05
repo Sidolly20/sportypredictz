@@ -1,20 +1,27 @@
 # SportyPredictz
 
-Football predictions and odds board. Express server + plain HTML/CSS/JS.
+Football predictions site. Express server that builds every page on the server (good for Google and slow phones).
+It reads matches, odds, predictions, live scores, results and tables from your odds-api.
 
-The server calls your odds-api (`/v1/matches`, `/v1/matches/:id`, `/v1/live`) and keeps the
-key in an environment variable. Browsers only talk to this site's own `/api/...` routes.
+## Files (all in the main folder)
+server.js, data.js, logic.js, content.js, views.js, demo.js, app.js, styles.css, package.json
 
-## Environment variables (Render)
+## Render environment variables
 | Name | Needed | What |
 |---|---|---|
-| `ODDS_API_KEY_SPORTY` | yes | key from the odds-api `api_keys` table |
-| `ODDS_API_BASE` | no | defaults to https://odds-api-g6vq.onrender.com |
+| ODDS_API_KEY_SPORTY | yes | the key for this site from your odds-api api_keys table |
+| SITE_URL | recommended | your public address, e.g. https://sportypredictz.onrender.com |
+| ODDS_API_BASE | no | defaults to https://odds-api-g6vq.onrender.com |
+| SITE_TZ | no | defaults to Africa/Lagos (used to decide what "today" is) |
+| BOARD_PAGES | no | pages of 20 matches loaded per day, default 3 |
 
-With no key set the site shows clearly labelled DEMO data.
+Without a key the site shows clearly marked DEMO data and tells Google not to index it.
 
 ## Render settings
 Build command `npm install`, start command `npm start`.
 
-## Files
-`server.js`, `index.html`, `styles.css`, `app.js`, `package.json`. Only the three web files are public.
+## Where to change the words
+Prediction pages, FAQs, About, Terms and Privacy text are all in content.js.
+
+## Useful addresses
+/api/status shows connection health. /sitemap.xml and /robots.txt are made automatically.

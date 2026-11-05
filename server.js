@@ -1,273 +1,196 @@
 // server.js - SportyPredictz
-// Serves the website and talks to your odds-api on behalf of the browser.
-// The odds-api key lives ONLY here (an environment variable). Browsers never see it.
+// A real multi-page website: every page is built on the server, so phones and Google see full content at once.
+// It talks to your odds-api using a key kept in an environment variable. Browsers never see the key.
 
 import express from "express";
+import compression from "compression";
+import crypto from "crypto";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { API_BASE, DEMO, status, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError } from "./data.js";
+import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify } from "./logic.js";
+import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
+import * as V from "./views.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-
 const PORT = process.env.PORT || 3000;
-const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
-const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
+const SITE_URL = (process.env.SITE_URL || "").replace(/\/+$/, "");
 
-// Free Render services sleep. Waking odds-api can take up to a minute.
-const UPSTREAM_TIMEOUT_MS = 70 * 1000;
+app.set("trust proxy", true);
+app.disable("x-powered-by");
+app.use(compression());
+app.use((req, res, next) => {
+  res.set({ "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Frame-Options": "SAMEORIGIN" });
+  next();
+});
 
-// How long we keep each kind of answer (seconds). Shared by all visitors,
-// so 1,000 visitors still cost odds-api only a handful of calls.
-const TTL = { matches: 90, live: 30, detail: 120 };
+// Version tag for the css/js files so phones always pick up new versions.
+const ASSET_V = crypto.createHash("md5")
+  .update(fs.readFileSync(path.join(__dirname, "styles.css")))
+  .update(fs.readFileSync(path.join(__dirname, "app.js")))
+  .digest("hex").slice(0, 8);
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const seenLeagues = new Map(); // keeps league pages alive on days without matches
 
-// ---------- tiny in-memory cache ----------
-const cache = new Map();      // path -> { at, body }
-const inflight = new Map();   // path -> Promise (so identical requests share one call)
-const MAX_CACHE = 400;
+const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
 
-const status = { lastOk: null, lastError: null, lastStatus: null };
-
-class UpstreamError extends Error {
-  constructor(code, body) {
-    super(`odds-api answered ${code}`);
-    this.code = code;
-    this.body = body;
-  }
+function makeCtx(req, board, live) {
+  for (const m of board.matches) if (m.league.id != null) seenLeagues.set(m.league.id, m.league);
+  const leagues = [...seenLeagues.values()].sort(byLeague);
+  const t = V.tickerHtml(live.matches || [], board.matches);
+  return {
+    origin: SITE_URL || `${req.protocol}://${req.get("host")}`,
+    demo: DEMO, v: ASSET_V, leagues, ticker: t, liveCount: (live.matches || []).length
+  };
 }
 
-function remember(path, body) {
-  if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value);
-  cache.set(path, { at: Date.now(), body });
-}
-
-async function callOddsApi(path, ttlSeconds) {
-  const hit = cache.get(path);
-  if (hit && Date.now() - hit.at < ttlSeconds * 1000) return { ...hit.body, stale: false };
-
-  if (inflight.has(path)) return inflight.get(path);
-
-  const job = (async () => {
+// Builds one page: gets the data, runs the page function, wraps it in the layout.
+function route(build, { maxAge = 60 } = {}) {
+  return async (req, res) => {
     try {
-      const r = await fetch(API_BASE + path, {
-        headers: { "x-api-key": API_KEY, accept: "application/json" },
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
-      });
-      const body = await r.json().catch(() => null);
-      status.lastStatus = r.status;
-      if (!r.ok) throw new UpstreamError(r.status, body);
-      status.lastOk = new Date().toISOString();
-      status.lastError = null;
-      remember(path, body || {});
-      return { ...(body || {}), stale: false };
+      const [board, live] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] })]);
+      const ctx = makeCtx(req, board, live);
+      const pg = await build({ req, res, ctx, board, live });
+      if (!pg) return send404(req, res, ctx);
+      res.status(pg.status || 200).set("Cache-Control", `public, max-age=${maxAge}`).type("html").send(V.layout(ctx, pg));
     } catch (err) {
-      const code = err instanceof UpstreamError ? err.code : 0;
-      status.lastError = err.message;
-      // Network trouble or odds-api having a bad moment: serve the older copy if we have one.
-      if (hit && (code === 0 || code >= 500)) return { ...hit.body, stale: true };
-      throw err;
-    } finally {
-      inflight.delete(path);
+      console.error("Page error:", req.path, err.message);
+      try {
+        const ctx = { origin: SITE_URL || `${req.protocol}://${req.get("host")}`, demo: DEMO, v: ASSET_V, leagues: [], ticker: { label: "NEXT UP", items: "" }, liveCount: 0 };
+        res.status(503).set("Cache-Control", "no-store").type("html").send(V.layout(ctx, V.errorPage()));
+      } catch { res.status(503).send("Please try again in a minute."); }
     }
-  })();
-
-  inflight.set(path, job);
-  return job;
+  };
 }
 
-function sendError(res, err) {
-  const code = err instanceof UpstreamError ? err.code : 0;
-  console.error("odds-api call failed:", err.message);
-  if (code === 429) {
-    return res.status(429).json({ error: "The daily data limit was reached. Please try again later." });
-  }
-  if (code === 401) {
-    return res.status(502).json({ error: "The data service is not accepting this site right now." });
-  }
-  if (code === 400 && err.body?.error) {
-    return res.status(400).json({ error: err.body.error });
-  }
-  return res.status(502).json({ error: "Data is temporarily unavailable. Please try again shortly." });
+function send404(req, res, ctx) {
+  res.status(404).set("Cache-Control", "no-store").type("html").send(V.layout(ctx, V.notFoundPage()));
 }
 
-// ---------- demo data (used only when no key is set) ----------
-// Same shape as odds-api, so the site looks right before the key is connected.
-const TEAMS = {
-  "Premier League": [["Arsenal", 88], ["Chelsea", 78], ["Liverpool", 90], ["Tottenham", 76], ["Man City", 92], ["Newcastle", 77], ["Everton", 66], ["Brighton", 72]],
-  "La Liga": [["Real Madrid", 91], ["Barcelona", 89], ["Atletico Madrid", 82], ["Sevilla", 70], ["Valencia", 68], ["Villarreal", 72]],
-  "Serie A": [["Inter", 87], ["Juventus", 80], ["AC Milan", 81], ["Napoli", 82], ["Roma", 75], ["Lazio", 74]],
-  "Bundesliga": [["Bayern Munich", 91], ["Dortmund", 82], ["Leverkusen", 85], ["RB Leipzig", 80], ["Stuttgart", 74], ["Frankfurt", 73]],
-  "Champions League": [["PSG", 88], ["Benfica", 76], ["Porto", 75], ["Ajax", 73], ["Celtic", 68], ["Galatasaray", 71]]
+const dayList = (board) => {
+  const today = todayKey();
+  const keys = new Set([today, addDays(today, 1)]);
+  for (const m of board.matches) {
+    const k = dayKey(m.ts);
+    if (k >= today && k <= addDays(today, 2)) keys.add(k);
+  }
+  return [...keys].sort();
 };
-const LEAGUE_IDS = { "Premier League": 1, "La Liga": 2, "Serie A": 3, "Bundesliga": 4, "Champions League": 5 };
 
-function seeded(seed) {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
-}
+// ---------- pages ----------
+app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt })));
 
-function demoDay(date) {
-  const rnd = seeded(Number(date.replaceAll("-", "")));
-  const out = [];
-  let idx = 1;
-  for (const [league, teams] of Object.entries(TEAMS)) {
-    const pool = [...teams].sort(() => rnd() - 0.5);
-    for (let i = 0; i + 1 < pool.length && i < 4; i += 2) {
-      const [home, hs] = pool[i];
-      const [away, as] = pool[i + 1];
-      const diff = (hs - as + 6) / 14;
-      const pH = Math.min(78, Math.max(14, 38 + diff * 22));
-      const pD = Math.max(12, 28 - Math.abs(diff) * 4);
-      const pA = 100 - pH - pD;
-      const hour = 12 + Math.floor(rnd() * 9);
-      const minute = rnd() > 0.5 ? 30 : 0;
-      const kickoff = `${date}T${String(hour).padStart(2, "0")}:${minute === 0 ? "00" : "30"}:00Z`;
-      const price = (p) => Math.max(1.01, +((100 / p) * 0.94).toFixed(2));
-      const over = 44 + rnd() * 26;
-      const btts = 40 + rnd() * 24;
-      const top = Math.max(pH, pD, pA);
-      out.push({
-        id: Number(date.replaceAll("-", "")) * 100 + idx,
-        league: { id: LEAGUE_IDS[league], name: league, logo: null },
-        home: { id: null, name: home, logo: null },
-        away: { id: null, name: away, logo: null },
-        kickoff,
-        status: "notstarted",
-        odds: {
-          type: "consensus",
-          home_win: price(pH), draw: price(pD), away_win: price(pA),
-          over_25_goals: price(over), under_25_goals: price(100 - over),
-          btts_yes: price(btts), btts_no: price(100 - btts)
-        },
-        prediction: {
-          source: "demo",
-          home_win_pct: +pH.toFixed(1), draw_pct: +pD.toFixed(1), away_win_pct: +pA.toFixed(1),
-          expected_goals: { home: +(1 + pH / 60).toFixed(2), away: +(0.6 + pA / 70).toFixed(2) },
-          over_25_pct: +over.toFixed(1), btts_yes_pct: +btts.toFixed(1),
-          most_likely_score: pH > pA ? "2-1" : pA > pH ? "1-2" : "1-1",
-          confidence: +(top / 100).toFixed(2)
-        }
-      });
-      idx++;
-    }
-  }
-  return out.sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-}
+app.get("/football-predictions-today", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: todayKey() })));
+app.get("/football-predictions-tomorrow", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: addDays(todayKey(), 1) })));
+app.get("/football-predictions/:date", route(({ req, ctx, board }) => {
+  const key = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !dayList(board).includes(key)) return null;
+  return V.dayPage(ctx, { matches: board.matches, days: dayList(board), key });
+}));
 
-function demoMatches(q) {
-  const date = q.date_from || new Date().toISOString().slice(0, 10);
-  let list = demoDay(date);
-  if (q.league_id) list = list.filter((m) => String(m.league.id) === String(q.league_id));
-  const limit = Math.min(Math.max(parseInt(q.limit) || 10, 1), 20);
-  const offset = Math.max(parseInt(q.offset) || 0, 0);
-  return {
-    demo: true, stale: false, has_more: list.length > offset + limit, limit, offset,
-    window: { from: date, to: q.date_to || date },
-    matches: list.slice(offset, offset + limit)
-  };
-}
+app.get("/predictions", route(({ ctx, board }) => V.hubPage(ctx, { matches: board.matches })));
+app.get("/predictions/:slug", route(({ req, ctx, board }) => {
+  const cat = CAT_BY_SLUG[req.params.slug];
+  return cat ? V.categoryPage(ctx, { cat, matches: board.matches }) : null;
+}));
 
-function demoLive() {
-  const minuteBase = new Date().getMinutes() + 20;
-  const mk = (id, league, home, away, hs, as, add) => ({
-    id, league: { id: LEAGUE_IDS[league], name: league, logo: null },
-    home: { id: null, name: home, logo: null }, away: { id: null, name: away, logo: null },
-    kickoff: new Date().toISOString(), status: "inprogress", period: "2nd half",
-    minute: Math.min(89, minuteBase + add), score: { home: hs, away: as }
-  });
-  return {
-    demo: true, stale: false, count: 3,
-    matches: [
-      mk(9001, "Premier League", "Newcastle", "Everton", 2, 0, 5),
-      mk(9002, "Serie A", "Roma", "Lazio", 1, 1, 12),
-      mk(9003, "La Liga", "Sevilla", "Valencia", 0, 1, 0)
-    ]
-  };
-}
+app.get("/leagues", route(({ ctx, board }) => {
+  const counts = new Map();
+  for (const m of board.matches) counts.set(m.league.id, (counts.get(m.league.id) || 0) + 1);
+  return V.leaguesPage(ctx, { leagues: ctx.leagues, counts });
+}));
+app.get("/leagues/:slug", route(async ({ req, ctx, board }) => {
+  const id = parseLeagueSlug(req.params.slug);
+  const league = id != null ? seenLeagues.get(id) : null;
+  if (!league) return null;
+  const matches = board.matches.filter((m) => m.league.id === id);
+  const standings = await withTimeout(getStandings(league), 12000, null);
+  return V.leaguePage(ctx, { league, matches, standings, allLeagues: ctx.leagues });
+}));
 
-function demoDetail(id) {
-  const date = String(Math.floor(id / 100)).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
-  if (!DATE_RE.test(date)) return null;
-  const m = demoDay(date).find((x) => x.id === id);
-  if (!m) return null;
-  return { demo: true, stale: false, match: { ...m, score: { home: null, away: null } }, odds: m.odds, prediction: m.prediction };
-}
-
-// ---------- API for the website ----------
-app.get("/api/status", (req, res) => {
-  res.json({
-    mode: API_KEY ? "live" : "demo",
-    upstream: API_BASE.replace(/^https?:\/\//, ""),
-    lastOk: status.lastOk,
-    lastStatus: status.lastStatus,
-    lastError: status.lastError
-  });
-});
-
-app.get("/api/matches", async (req, res) => {
-  const q = new URLSearchParams();
-  for (const name of ["date_from", "date_to"]) {
-    if (req.query[name]) {
-      if (!DATE_RE.test(String(req.query[name]))) return res.status(400).json({ error: `${name} must look like 2026-11-05.` });
-      q.set(name, String(req.query[name]));
-    }
-  }
-  if (req.query.league_id) {
-    const n = parseInt(req.query.league_id);
-    if (!Number.isInteger(n)) return res.status(400).json({ error: "league_id must be a number." });
-    q.set("league_id", String(n));
-  }
-  if (req.query.team_name) q.set("team_name", String(req.query.team_name).slice(0, 60));
-  q.set("limit", String(Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 20)));
-  q.set("offset", String(Math.min(Math.max(parseInt(req.query.offset) || 0, 0), 200)));
-  q.sort();
-
-  if (!API_KEY) return res.json(demoMatches(Object.fromEntries(q)));
+app.get("/match/:id/:slug?", async (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return next();
   try {
-    res.json(await callOddsApi(`/v1/matches?${q}`, TTL.matches));
+    const m = await getMatch(id);
+    if (m && req.params.slug !== slugify(`${m.home.name} vs ${m.away.name}`)) return res.redirect(301, matchPath(m));
+    return route(async ({ ctx, board }) => {
+      if (!m) return null;
+      const related = board.matches.filter((x) => x.league.id === m.league.id && x.id !== m.id).slice(0, 5);
+      return V.matchPage(ctx, { m, related });
+    }, { maxAge: 45 })(req, res);
   } catch (err) {
-    sendError(res, err);
+    console.error("Match error:", err.message);
+    return route(() => V.errorPage())(req, res);
   }
 });
 
+app.get("/live", route(({ ctx, live }) => V.livePage(ctx, { live: live.matches || [] }), { maxAge: 20 }));
+app.get("/results", route(async ({ ctx }) => V.resultsPage(ctx, { results: (await getResults()).results || [] }), { maxAge: 120 }));
+app.get("/favourites", route(({ ctx }) => V.favouritesPage(ctx), { maxAge: 300 }));
+for (const slug of Object.keys(PAGES)) app.get(`/${slug}`, route(({ ctx }) => V.staticPage(ctx, slug), { maxAge: 3600 }));
+
+// ---------- small JSON endpoints for the browser ----------
 app.get("/api/live", async (req, res) => {
-  if (!API_KEY) return res.json(demoLive());
-  try {
-    res.json(await callOddsApi("/v1/live", TTL.live));
-  } catch (err) {
-    sendError(res, err);
-  }
+  const [board, live] = await Promise.all([getBoard(), getLive()]);
+  const list = live.matches || [];
+  res.set("Cache-Control", "no-store").json({ count: list.length, ticker: V.tickerHtml(list, board.matches), list: V.liveList(list) });
 });
 
-app.get("/api/match/:id", async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "The match id must be a number." });
-  if (!API_KEY) {
-    const d = demoDetail(id);
-    return d ? res.json(d) : res.status(404).json({ error: "Match not found." });
-  }
-  try {
-    res.json(await callOddsApi(`/v1/matches/${id}?include=odds,prediction`, TTL.detail));
-  } catch (err) {
-    if (err instanceof UpstreamError && err.code === 404) return res.status(404).json({ error: "Match not found." });
-    sendError(res, err);
-  }
+app.get("/api/status", (req, res) => {
+  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, ...status });
+});
+
+// Debug: shows the SHAPE of a league table from odds-api (no keys, no secrets). Handy if a table looks empty.
+app.get("/api/debug/standings/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "id must be a number" });
+  try { res.json(await standingsShape(id)); }
+  catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
 });
 
 app.get("/healthz", (req, res) => res.send("ok"));
 
-// ---------- the website itself ----------
-// Only these three files are public. Nothing else in the folder can be downloaded.
-const sendPublic = (file) => (req, res) => res.sendFile(file, { root: __dirname });
-app.get("/", sendPublic("index.html"));
-app.get("/styles.css", sendPublic("styles.css"));
-app.get("/app.js", sendPublic("app.js"));
+// ---------- search-engine files ----------
+app.get("/robots.txt", (req, res) => {
+  const origin = SITE_URL || `${req.protocol}://${req.get("host")}`;
+  res.type("text/plain").send(DEMO
+    ? "User-agent: *\nDisallow: /\n"
+    : `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /favourites\n\nSitemap: ${origin}/sitemap.xml\n`);
+});
+
+app.get("/sitemap.xml", async (req, res) => {
+  const origin = SITE_URL || `${req.protocol}://${req.get("host")}`;
+  const board = await getBoard();
+  const today = todayKey();
+  const urls = [
+    ["/", 1.0], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
+    ...CATEGORIES.map((c) => [`/predictions/${c.slug}`, 0.8]),
+    ["/leagues", 0.7], ["/live", 0.6], ["/results", 0.5],
+    ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
+    ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
+    ...board.matches.slice(0, 400).map((m) => [matchPath(m), 0.5])
+  ];
+  const day = today;
+  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr]) => `<url><loc>${origin}${p}</loc><lastmod>${day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);
+});
+
+// ---------- the two browser files ----------
+const sendAsset = (file, type) => (req, res) => {
+  res.type(type).set("Cache-Control", req.query.v ? "public, max-age=31536000, immutable" : "public, max-age=300");
+  res.sendFile(file, { root: __dirname });
+};
+app.get("/styles.css", sendAsset("styles.css", "text/css"));
+app.get("/app.js", sendAsset("app.js", "application/javascript"));
+
+// anything else
+app.use(route(() => null));
 
 app.listen(PORT, () => {
   console.log(`SportyPredictz running on port ${PORT}`);
-  console.log(API_KEY
-    ? `Using odds-api at ${API_BASE}`
-    : "ODDS_API_KEY_SPORTY is not set: showing DEMO data.");
+  console.log(DEMO ? "ODDS_API_KEY_SPORTY is not set: showing DEMO data (and hiding from Google)." : `Using odds-api at ${API_BASE}`);
+  startBoardLoop();
 });
