@@ -633,3 +633,4 @@ time.sc { display: inline; min-width: 0; height: auto; padding: 0; background: n
 .story p { color: #cfd8e3; font-size: .95rem; margin-bottom: 8px; max-width: 75ch; }
 .story small { color: var(--mute); font-size: .7rem; }
 .lgnote { font-size: .76rem; color: var(--mute); padding: 2px 6px 8px; } .lgnote b { color: var(--acid); } .lgnote b.hot { color: var(--hot); }
+.legt { display: flex; flex-direction: column; align-items: center; line-height: 1.2; } .legt small { font-size: .62rem; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; }

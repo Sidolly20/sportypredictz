@@ -153,6 +153,8 @@ export function marketsOf(m) {
   const o = m.odds || {};
   const p = m.prediction || {};
   const h = m.home.name, a = m.away.name;
+  // Over 3.5 must be clearly dearer and less likely than Over 2.5. If the feed says otherwise, the number is not trusted.
+  const o35ok = num(o.over_35_goals) !== null && o.over_35_goals >= 1.8 && (num(o.over_25_goals) === null || o.over_35_goals >= o.over_25_goals + 0.25) && (num(p.over_35_pct) === null || num(p.over_25_pct) === null || p.over_35_pct < p.over_25_pct);
   const dc = (x, y) => { const v = inv(x, y); return v && v > 1 ? +v.toFixed(2) : null; };
   return {
     "1x2": [
@@ -164,7 +166,7 @@ export function marketsOf(m) {
       { k: "O1.5", label: "Over 1.5", odd: o.over_15_goals, pick: "Over 1.5 goals", pct: p.over_15_pct },
       { k: "O2.5", label: "Over 2.5", odd: o.over_25_goals, pick: "Over 2.5 goals", pct: p.over_25_pct },
       { k: "U2.5", label: "Under 2.5", odd: o.under_25_goals, pick: "Under 2.5 goals", pct: num(p.over_25_pct) === null ? null : 100 - p.over_25_pct },
-      { k: "O3.5", label: "Over 3.5", odd: o.over_35_goals, pick: "Over 3.5 goals", pct: p.over_35_pct }
+      { k: "O3.5", label: "Over 3.5", odd: o35ok ? o.over_35_goals : null, pick: "Over 3.5 goals", pct: o35ok ? p.over_35_pct : null }
     ],
     btts: [
       { k: "GG", label: "Both score", odd: o.btts_yes, pick: "Both teams to score", pct: p.btts_yes_pct },
@@ -326,7 +328,8 @@ export const PICKERS = {
   },
   "over-3-5-goals": (m) => {
     const pct = num(m.prediction?.over_35_pct);
-    return pct !== null && pct >= 38 ? item(m, "O3.5", "Over 3.5 goals", pct, m.odds?.over_35_goals) : null;
+    const d35 = marketsOf(m).goals.find((x) => x.k === "O3.5");
+    return d35 && d35.odd && pct !== null && pct >= 38 ? item(m, "O3.5", "Over 3.5 goals", pct, d35.odd) : null;
   },
   "both-teams-not-to-score": (m) => {
     const y = num(m.prediction?.btts_yes_pct);
@@ -362,22 +365,51 @@ export function rankPicks(slug, matches) {
 }
 
 // Accumulator builder: stack the most likely picks until the total odds reach the target.
-export function buildAcca(matches, target, maxLegs) {
-  const pool = matches
-    .map((m) => { const b = bestSide(m); return b && b.pct >= 50 && b.odd && b.odd >= 1.12 && b.odd <= 3 ? { m, b } : null; })
-    .filter(Boolean)
-    .sort((x, y) => y.b.pct - x.b.pct);
-  const legs = [];
-  const perLeague = new Map();
-  let total = 1;
-  for (const { m, b } of pool) {
-    const n = perLeague.get(m.league.id) || 0;
-    if (n >= 2) continue;
-    legs.push({ m, k: b.k, label: b.label, pct: b.pct, odd: b.odd });
-    perLeague.set(m.league.id, n + 1);
-    total *= b.odd;
-    if (total >= target || legs.length >= maxLegs) break;
+// One match can offer several kinds of safe pick. The acca mixes the kinds so it does not hang on straight wins only.
+const ACCA_KINDS = [
+  { type: "win", min: 55, pick: (m) => { const b = bestSide(m); return b && b.pct >= 55 && b.odd ? { k: b.k, label: b.label, pct: b.pct, odd: b.odd } : null; } },
+  { type: "dc", min: 75, pick: (m) => { const x = ["1X", "X2"].map((k) => marketsOf(m).dc.find((d) => d.k === k)).filter((d) => d && num(d.pct) !== null && d.pct >= 75 && d.odd).sort((u, v) => v.pct - u.pct)[0]; return x ? { k: x.k, label: x.pick, pct: x.pct, odd: x.odd, calc: true } : null; } },
+  { type: "goals", pick: (m) => { const g = marketsOf(m).goals; const o15 = g.find((d) => d.k === "O1.5"); const o25 = g.find((d) => d.k === "O2.5"); if (o15 && num(o15.pct) !== null && o15.pct >= 80 && o15.odd) return { k: "O1.5", label: o15.pick, pct: o15.pct, odd: o15.odd }; return o25 && num(o25.pct) !== null && o25.pct >= 62 && o25.odd ? { k: "O2.5", label: o25.pick, pct: o25.pct, odd: o25.odd } : null; } },
+  { type: "btts", pick: (m) => { const d = marketsOf(m).btts.find((x) => x.k === "GG"); return d && num(d.pct) !== null && d.pct >= 60 && d.odd ? { k: "GG", label: d.pick, pct: d.pct, odd: d.odd } : null; } }
+];
+function accaFrom(matches, target, cap) {
+  const cands = [];
+  for (const m of matches) for (const kd of ACCA_KINDS) {
+    const c = kd.pick(m);
+    if (c && c.odd >= 1.08 && c.odd <= 3) cands.push({ m, type: kd.type, ...c });
   }
-  if (legs.length < 2 || total < target * 0.8) return null;
+  const legs = [];
+  const usedMatch = new Set();
+  const perLeague = new Map();
+  const perType = {};
+  let total = 1;
+  while (legs.length < cap && total < target) {
+    let best = null, bestScore = -1e9;
+    for (const c of cands) {
+      if (usedMatch.has(c.m.id) || (perLeague.get(c.m.league.id) || 0) >= 2) continue;
+      const score = c.pct - 7 * (perType[c.type] || 0);
+      if (score > bestScore) { best = c; bestScore = score; }
+    }
+    if (!best) break;
+    legs.push({ m: best.m, k: best.k, label: best.label, pct: best.pct, odd: best.odd, calc: !!best.calc, type: best.type });
+    usedMatch.add(best.m.id);
+    perLeague.set(best.m.league.id, (perLeague.get(best.m.league.id) || 0) + 1);
+    perType[best.type] = (perType[best.type] || 0) + 1;
+    total *= best.odd;
+  }
+  if (legs.length < 2 || total < target * 0.9) return null;
+  legs.sort((x, y) => x.m.ts - y.m.ts);
   return { legs, total };
+}
+// Builds one acca. It tries to keep every leg on the SAME day (earliest day first); only if no single
+// day has enough strong picks does it mix days, and then every leg shows its date.
+export function buildAcca(matches, target, maxLegs) {
+  const cap = Math.max(maxLegs || 0, target <= 2 ? 4 : target <= 3 ? 5 : target <= 5 ? 7 : 12);
+  const days = [...new Set(matches.map((m) => dayKey(m.ts)))].sort();
+  for (const d of days) {
+    const r = accaFrom(matches.filter((m) => dayKey(m.ts) === d), target, cap);
+    if (r) return { ...r, day: d };
+  }
+  const r = accaFrom(matches, target, cap);
+  return r ? { ...r, day: null } : null;
 }

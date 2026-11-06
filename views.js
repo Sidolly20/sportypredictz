@@ -258,8 +258,8 @@ function pickCard(it) {
 }
 
 const accaHtml = (name, acca, href = "") => acca
-  ? `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2><span class="acca-total">Total odds <b>${acca.total.toFixed(2)}</b></span></div>
-      ${acca.legs.map((l) => `<div class="leg" ${rowAttrs(l.m, l.k)}>${timeEl(l.m)}<a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="mono">${fmtOdd(l.odd)}</span></div>`).join("")}
+  ? `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2><span class="acca-total">${plural(acca.legs.length, "leg")} · Total odds <b>${acca.total.toFixed(2)}</b></span></div>
+      ${acca.legs.map((l) => `<div class="leg" ${rowAttrs(l.m, l.k)}><span class="legt">${dayKey(l.m.ts) !== todayKey() ? `<small>${esc(shortDate(l.m.ts))}</small>` : ""}${timeEl(l.m)}</span><a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="mono">${l.calc ? "~" : ""}${fmtOdd(l.odd)}</span></div>`).join("")}
       <button type="button" class="btn solid" data-acca='${esc(JSON.stringify(acca.legs.map((l) => ({ mid: l.m.id, k: l.k, odd: l.odd.toFixed(2), pick: l.label, teams: `${l.m.home.name} v ${l.m.away.name}` }))))}'>Add all to pick slip</button></section>`
   : `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2></div><div class="empty">Not enough strong picks to build this acca right now.</div></section>`;
 
@@ -273,7 +273,7 @@ function pickRow(it) {
     ${whenEl(m, it.k)}
     <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span>${scEl(m, "h")}</span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span>${scEl(m, "a")}</span><span class="lgline">${esc(m.league.name)}</span></a>
     <div class="pkcell"><b>${esc(it.label)}</b><span class="bar"><i style="width:${Math.min(100, Math.round(it.pct))}%"></i></span><small>${note}</small></div>
-    ${oddBtn(m, { k: it.k, label: it.k, odd: it.odd, pick: it.label, calc: it.calc })}
+    ${oddBtn(m, { k: it.k, label: ({ "O1.5": "Over 1.5", "O2.5": "Over 2.5", "O3.5": "Over 3.5", "U2.5": "Under 2.5", GG: "Both score", NG: "One or none" })[it.k] || it.k, odd: it.odd, pick: it.label, calc: it.calc })}
     ${starBtn(m)}
   </article>`;
 }
