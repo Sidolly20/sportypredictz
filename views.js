@@ -105,63 +105,151 @@ const say = (seed, list) => list[hash(seed) % list.length];
 const vs = (m) => `${m.home.name} v ${m.away.name}`;
 const scoreTxt = (m) => `${m.home.name} ${scNum(m, "h")}–${scNum(m, "a")} ${m.away.name}`;
 const joinAnd = (arr) => arr.length < 2 ? arr.join("") : `${arr.slice(0, -1).join(", ")} and ${arr[arr.length - 1]}`;
+
+// Each candidate paragraph has a score for how much it matters on THIS page. The highest scores lead,
+// so two leagues (or the same league on two days) open with different angles. Ties break on a seed.
 function leagueStory(league, matches, ctx, standings) {
   const f = leagueFacts(league, matches, ctx, standings);
-  const n = f.name, seed = `${league.id}|${todayKey()}`;
-  const ps = [];
-  // 1. the situation right now
-  if (f.now.length) {
-    const m = f.now[0];
-    const lead = Number(resOf(m).h) - Number(resOf(m).a);
-    const tp = topPick(m);
-    const ps0 = tp ? pickState(m, tp.k) : null;
-    const tail = ps0 === "on" ? ` Our pick, ${tp.label}, is winning at the moment.` : ps0 === "off" ? ` Our pick, ${tp.label}, is behind right now.` : "";
-    ps.push(f.now.length === 1
-      ? say(seed + "a", [`${scoreTxt(m)} is being played right now (${resOf(m).label || "live"}).${tail}`, `Play is under way in ${n}: ${scoreTxt(m)}, ${resOf(m).label || "live"}.${tail}`])
-      : say(seed + "b", [`${f.now.length} ${n} games are on right now, and the scores are updating as we go.`, `It's a live day in the ${n}: ${f.now.length} matches are in play at this moment.`]));
-    if (f.now.length > 1) ps.push(`In play: ${joinAnd(f.now.slice(0, 4).map((x) => `${scoreTxt(x)} (${resOf(x).label || "live"})`))}.`);
-    void lead;
-  } else if (f.today.length) {
-    const first = f.today[0];
-    ps.push(say(seed + "c", [
-      `${f.today.length === 1 ? "One" : f.today.length} ${n} ${f.today.length === 1 ? "game is" : "games are"} still to come today. First up is ${vs(first)} at ${clock(first.ts)}.`,
-      `Nothing has kicked off in the ${n} yet. ${vs(first)} starts the day at ${clock(first.ts)}.`,
-      `Still waiting on ${n} action today: ${vs(first)} is the first kick-off, at ${clock(first.ts)}.`
-    ]));
-  } else if (f.ahead.length) {
-    const nx = f.ahead[0];
-    ps.push(say(seed + "d", [
-      `There's no ${n} football today. The next game is ${vs(nx)} on ${shortDate(nx.ts)} at ${clock(nx.ts)}.`,
-      `A quiet spell for the ${n}: ${vs(nx)} on ${shortDate(nx.ts)} (${clock(nx.ts)}) is next on the list.`
-    ]));
-  } else if (!f.done.length) {
-    ps.push(`We don't have any ${n} fixtures loaded right now. Check back soon, this page fills itself in when they appear.`);
+  const n = f.name;
+  const seed = `${league.id}|${todayKey()}`;
+  const jitter = (k) => (hash(seed + k) % 100) / 1000; // 0 to 0.099, only breaks near-ties
+  const plural = (x, w) => `${x} ${w}${x === 1 ? "" : "s"}`;
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  const sorted = [...rows].sort((a, b) => a.pos - b.pos);
+  const C = []; // { score, key, text }
+  const add = (key, score, text) => { if (text) C.push({ key, score: score + jitter(key), text }); };
+
+  if (sorted.length >= 6) {
+    const top = sorted[0], second = sorted[1], fourth = sorted[3];
+    const tail = sorted[sorted.length - 1], safe = sorted[sorted.length - 4];
+    const gapTop = top.pts - second.pts, gapFour = top.pts - fourth.pts, gapSafe = safe.pts - tail.pts;
+    add("title", gapTop <= 2 ? 9 : gapTop >= 8 ? 3 : 5,
+      gapTop <= 2
+        ? `The title race is still open: ${top.team} lead on ${top.pts} points, only ${plural(gapTop, "point")} ahead of ${second.team} after ${top.p} games.`
+        : `${top.team} lead the ${n} on ${top.pts} points, ${plural(gapTop, "point")} clear of ${second.team} after ${top.p} games.`);
+    add("top4", gapFour <= 4 ? 7 : 2,
+      `${gapFour <= 4 ? "The top four is close" : "The chasing pack is already well back"}: fourth-placed ${fourth.team} are ${plural(gapFour, "point")} behind the leaders.`);
+    add("relegation", gapSafe <= 3 ? 8 : 3,
+      `At the bottom, ${tail.team} have ${tail.pts} points from ${tail.p} games. ${safe.team}, three places above them, have ${safe.pts}, so the gap to safety is ${plural(gapSafe, "point")}.`);
   }
-  // 2. what has finished
-  if (f.done.length) {
-    ps.push(say(seed + "e", [`Already finished: ${joinAnd(f.done.slice(0, 4).map(scoreTxt))}.`, `Full-time scores so far: ${joinAnd(f.done.slice(0, 4).map(scoreTxt))}.`]));
+
+  if (rows.length >= 6 && rows.every((r) => Number.isFinite(r.gf) && Number.isFinite(r.ga))) {
+    const played = rows.reduce((s, r) => s + r.p, 0);
+    const perGame = rows.reduce((s, r) => s + r.gf, 0) / (played / 2);
+    const attack = [...rows].sort((a, b) => b.gf / b.p - a.gf / a.p)[0];
+    const leak = [...rows].sort((a, b) => a.ga / a.p - b.ga / b.p)[0];
+    const extreme = perGame >= 2.9 || perGame <= 2.2;
+    add("goals", extreme ? 7 : 3,
+      `${perGame >= 2.8 ? "A high-scoring league" : perGame <= 2.2 ? "A low-scoring league" : "Goals are about average"}: ${perGame.toFixed(2)} a game across the table. ${attack.team === leak.team
+        ? `${attack.team} have both the most goals per game (${(attack.gf / attack.p).toFixed(2)}) and the fewest conceded (${(leak.ga / leak.p).toFixed(2)}).`
+        : `${attack.team} score the most per game (${(attack.gf / attack.p).toFixed(2)}), while ${leak.team} have conceded the fewest (${(leak.ga / leak.p).toFixed(2)} a game).`}`);
+  } else if (rows.length >= 6 && rows.every((r) => Number.isFinite(r.gd))) {
+    const perGd = rows.map((r) => ({ r, v: r.gd / r.p })).sort((a, b) => b.v - a.v);
+    const f1 = (v) => (v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2));
+    add("gdpg", 4, `Goal difference per game tells the story so far: ${perGd[0].r.team} lead on ${f1(perGd[0].v)} a game, and ${perGd[perGd.length - 1].r.team} are at the bottom on ${f1(perGd[perGd.length - 1].v)}.`);
   }
-  // 3. our best pick
-  if (f.best) {
-    const pct = Math.round(f.best.pct), odd = f.best.odd ? fmtOdd(f.best.odd) : null;
-    ps.push(say(seed + "f", [
-      `Our strongest ${n} pick is ${f.best.label} in ${vs(f.best.m)}. The model rates it at ${pct}%${odd ? ` and the price is ${f.best.calc ? "about " : ""}${odd}` : ""}.`,
-      `If you only look at one ${n} game, make it ${vs(f.best.m)}. We like ${f.best.label} (${pct}%)${odd ? `, priced at ${f.best.calc ? "about " : ""}${odd}` : ""}.`,
-      `${vs(f.best.m)} gives us the clearest call in the ${n}: ${f.best.label}, ${pct}% on our numbers${odd ? `, odds ${f.best.calc ? "about " : ""}${odd}` : ""}.`
-    ]));
+
+  if (rows.length >= 6 && rows.every((r) => Number.isFinite(r.gd))) {
+    const byGd = [...rows].sort((a, b) => b.gd - a.gd);
+    const gdPos = (r) => byGd.indexOf(r) + 1;
+    const big = rows.map((r) => ({ r, diff: gdPos(r) - r.pos })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+    if (big && Math.abs(big.diff) >= 3) {
+      const gd = big.r.gd > 0 ? `+${big.r.gd}` : `${big.r.gd}`;
+      add("mismatch", 7, big.diff > 0
+        ? `${big.r.team} are ${ord(big.r.pos)} on points but only ${ord(gdPos(big.r))} on goal difference (${gd}). Their position may be ahead of how they have played.`
+        : `${big.r.team} are only ${ord(big.r.pos)} on points despite ${ord(gdPos(big.r))} on goal difference (${gd}), so they could climb if the results follow the underlying play.`);
+    }
   }
-  // 4. goals
-  const g = avgPct(f.o25), b = avgPct(f.bt);
-  if (g !== null && b !== null) {
-    const mood = g >= 60 ? "Expect goals" : g >= 50 ? "Leaning towards goals" : g >= 40 ? "Goals are close to a coin flip" : "This looks like a tighter round";
-    ps.push(`${mood}: the model puts over 2.5 goals at ${g}% on average across the upcoming ${n} games, and both teams to score at ${b}%.`);
+
+  const formed = rows.filter((r) => typeof r.form === "string" && /^[WDL]{3,}$/i.test(r.form));
+  if (formed.length >= 6) {
+    const last5 = (s) => s.slice(-5).toUpperCase();
+    const pts = (s) => [...last5(s)].reduce((t, c) => t + (c === "W" ? 3 : c === "D" ? 1 : 0), 0);
+    const hot = [...formed].sort((a, b) => pts(b.form) - pts(a.form))[0];
+    const cold = [...formed].sort((a, b) => pts(a.form) - pts(b.form))[0];
+    add("form", pts(hot.form) - pts(cold.form) >= 8 ? 7 : 3,
+      `On recent form, ${hot.team} are the side to watch: ${pts(hot.form)} points from their last five (${last5(hot.form)}). ${cold.team} have managed ${pts(cold.form)} from theirs (${last5(cold.form)}).`);
   }
-  // 5. the table
-  if (f.lead) ps.push(say(seed + "g", [`${f.lead.team} are top of the ${n} table on ${f.lead.pts ?? "–"} points after ${f.lead.p ?? "–"} games.`, `At the top of the table it's ${f.lead.team}, ${f.lead.pts ?? "–"} points from ${f.lead.p ?? "–"} played.`]));
-  // 6. honesty about our record
-  if (f.recs.length) ps.push(`How we've done here lately: ${f.won} of ${f.recs.length} ${n} picks came in.`);
-  return { ps, f };
+
+  const finished = f.done.filter((m) => Number.isFinite(resOf(m).h) && Number.isFinite(resOf(m).a));
+  if (finished.length >= 3) {
+    const totals = finished.map((m) => resOf(m).h + resOf(m).a);
+    const avg = totals.reduce((a, b) => a + b, 0) / totals.length;
+    const over = totals.filter((t) => t > 2.5).length;
+    const homeW = finished.filter((m) => resOf(m).h > resOf(m).a).length;
+    const awayW = finished.filter((m) => resOf(m).a > resOf(m).h).length;
+    add("finished", finished.length >= 5 && (avg >= 3.5 || avg <= 2) ? 6 : 3,
+      `From the ${plural(finished.length, "finished game")} we have full scores for, the average is ${avg.toFixed(1)} goals, ${Math.round((100 * over) / finished.length)}% went over 2.5, and home sides have won ${homeW} to ${awayW} for away sides.`);
+  }
+
+  const withP = f.ahead.filter((m) => m.prediction);
+  if (withP.length >= 3) {
+    const read = withP.map((m) => {
+      const p = m.prediction;
+      const opts = [[m.home.name, num(p.home_win_pct)], ["a draw", num(p.draw_pct)], [m.away.name, num(p.away_win_pct)]].filter((x) => x[1] !== null);
+      const best = [...opts].sort((a, b) => b[1] - a[1])[0];
+      return { m, side: best ? best[0] : null, pct: best ? best[1] : null };
+    }).filter((x) => x.pct !== null);
+    const strong = read.filter((x) => x.pct >= 60).length;
+    const toss = read.filter((x) => x.pct < 45).length;
+    const sharp = [...read].sort((a, b) => b.pct - a.pct)[0];
+    const close = [...read].sort((a, b) => a.pct - b.pct)[0];
+    add("model", strong >= 2 || toss >= 2 ? 6 : 3,
+      `Still to come, the model sees ${plural(strong, "game")} where one side is at 60% or better, and ${plural(toss, "game")} that look like a coin toss (no side above 45%). The most one-sided on our numbers is ${vs(sharp.m)}, and the closest is ${vs(close.m)}.`);
+  }
+
+  if (f.recs.length >= 3) {
+    const rate = f.won / f.recs.length;
+    add("record", rate >= 0.6 || rate <= 0.3 ? 5 : 2, `Our picks in the ${n} so far: ${f.won} of ${f.recs.length} came in.`);
+  }
+
+  C.sort((a, b) => b.score - a.score);
+  const ps = C.slice(0, 6).map((c) => c.text);
+  const lead = C[0] ? C[0].key : null;
+
+  // Opening line: what is happening right now (short; the angle follows it)
+  if (f.now.length) ps.unshift(`${plural(f.now.length, "game")} in the ${n} ${f.now.length === 1 ? "is" : "are"} live right now.`);
+  else if (f.today.length) ps.unshift(`${plural(f.today.length, "game")} still to come in the ${n} today, starting with ${vs(f.today[0])} at ${clock(f.today[0].ts)}.`);
+  else if (f.ahead.length) ps.unshift(`No ${n} football today. Next up: ${vs(f.ahead[0])} on ${shortDate(f.ahead[0].ts)} at ${clock(f.ahead[0].ts)}.`);
+
+  return { ps, f, lead };
 }
+
+// Match page angle: the single most notable thing about THIS match, chosen the same way as the league page.
+function matchAngle(m, standings) {
+  const p = m.prediction, o = m.odds || {};
+  const C = [];
+  const seed = String(m.id);
+  const jit = (k) => (hash(seed + k) % 100) / 1000;
+  const h = m.home.name, a = m.away.name;
+  if (p && num(p.home_win_pct) !== null && num(o.home_win)) {
+    const mk = (price) => (1 / price) * 100;
+    const gapH = num(p.home_win_pct) - mk(o.home_win), gapA = num(p.away_win_pct) - (num(o.away_win) ? mk(o.away_win) : 0);
+    const side = Math.abs(gapH) >= Math.abs(gapA) ? { t: h, g: gapH, pct: num(p.home_win_pct), price: o.home_win } : { t: a, g: gapA, pct: num(p.away_win_pct), price: o.away_win };
+    if (Math.abs(side.g) >= 4) C.push({ score: 8 + jit("value"), text: `The model rates ${side.t} at ${Math.round(side.pct)}%, while the price of ${fmtOdd(side.price)} implies about ${Math.round(mk(side.price))}%. That ${side.g > 0 ? "gap" : "shortfall"} of ${Math.abs(Math.round(side.g))} points is the main thing to weigh here.` });
+  }
+  const xg = p && p.expected_goals;
+  if (xg && num(xg.home) !== null && num(xg.away) !== null) {
+    const total = num(xg.home) + num(xg.away);
+    if (total >= 3 || total <= 2.1) C.push({ score: 6 + jit("goals"), text: `The model expects about ${total.toFixed(1)} goals between the two sides (${h} ${num(xg.home).toFixed(1)}, ${a} ${num(xg.away).toFixed(1)}), which points to a ${total >= 3 ? "open game" : "tight, low-scoring game"}.` });
+  }
+  if (p && num(p.draw_pct) !== null && Math.max(num(p.home_win_pct) || 0, num(p.away_win_pct) || 0, num(p.draw_pct)) < 45) {
+    C.push({ score: 6 + jit("toss"), text: `No side is clear on our numbers: the highest of home, draw and away is under 45%, so this one is close to a coin toss.` });
+  }
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  if (rows.length >= 6) {
+    const sorted = [...rows].sort((x, y) => x.pos - y.pos);
+    const hr = sorted.find((r) => r.team === h), ar = sorted.find((r) => r.team === a);
+    const fourth = sorted[3], safe = sorted[sorted.length - 4];
+    if (hr && ar) {
+      const near = [[hr, "Home"], [ar, "Away"]].map(([r, lab]) => ({ r, lab, d: Math.min(Math.abs(r.pts - fourth.pts), Math.abs(r.pts - safe.pts)) })).sort((x, y) => x.d - y.d)[0];
+      if (near.d <= 3) C.push({ score: 7 + jit("stakes"), text: `${near.r.team} are ${ord(near.r.pos)} on ${near.r.pts} points, within ${near.d} of a key line in the table (fourth place or the drop zone), so the result matters beyond this match.` });
+    }
+  }
+  C.sort((x, y) => y.score - x.score);
+  return C[0] ? C[0].text : null;
+}
+
 const storyHtml = (st) => `<section class="story" aria-label="${esc(st.f.name)} update"><h2>${esc(st.f.name)} update</h2>${st.ps.map((p) => `<p>${esc(p)}</p>`).join("")}<small class="mono">Written from live data · refreshed ${esc(clock(Date.now()))}</small></section>`;
 const lgNote = (g) => {
   const f = leagueFacts(g.league, g.matches, { record: null }, null);
@@ -601,7 +689,26 @@ function stageBlock(m, pick, verdictState) {
   return "";
 }
 
-export function matchPage(ctx, { m, related }) {
+const ord = (n) => { const x = Number(n); const s = ["th", "st", "nd", "rd"], v = x % 100; return `${x}${s[(v - 20) % 10] || s[v] || s[0]}`; };
+// Before kick-off: where both sides sit in the table, and what a win would change.
+function stakesBlock(m, standings) {
+  if (resOf(m).state !== "pre") return "";
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  if (rows.length < 6) return "";
+  const sorted = [...rows].sort((a, b) => a.pos - b.pos);
+  const h = sorted.find((r) => r.team === m.home.name), a = sorted.find((r) => r.team === m.away.name);
+  if (!h || !a) return "";
+  const fourth = sorted[3], safe = sorted[sorted.length - 4];
+  const sentence = (r) => `${r.team} are ${ord(r.pos)} on ${r.pts} points from ${r.p} games`;
+  const homeWin = h.pts + 3;
+  const lift = homeWin > fourth.pts
+    ? `A home win would lift ${h.team} to ${homeWin} points, above fourth place (${fourth.team}, ${fourth.pts}).`
+    : `A home win would lift ${h.team} to ${homeWin} points, still ${fourth.pts - homeWin} short of fourth place (${fourth.team}, ${fourth.pts}).`;
+  const drop = `The side just clear of the drop zone, ${safe.team}, have ${safe.pts} points.`;
+  return `<section class="block stakes"><h2>What's at stake</h2><p>${esc(sentence(h))}. ${esc(sentence(a))}.</p><p>${esc(lift)} ${esc(drop)}</p></section>`;
+}
+
+export function matchPage(ctx, { m, related, standings = null }) {
   const path = matchPath(m);
   const p = m.prediction;
   const mk = marketsOf(m);
@@ -628,6 +735,8 @@ export function matchPage(ctx, { m, related }) {
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}
   </section>
   ${compareTable(m) ? `<section class="block"><h2>${esc(m.home.name)} vs ${esc(m.away.name)}: comparison</h2><div class="tablewrap">${compareTable(m)}</div><p class="mnote show">The greener side leads on that line. Edge is model chance × odds − 1.</p></section>` : ""}
+  ${(() => { const t = matchAngle(m, standings); return t ? `<section class="block angle"><h2>The angle on this match</h2><p>${esc(t)}</p></section>` : ""; })()}
+  ${stakesBlock(m, standings)}
   <section class="prose"><h2>Match analysis</h2>${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</section>
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}
   <section class="block"><div class="block-head"><h2>More prediction types</h2><a href="/predictions">All →</a></div><div class="catgrid small">${CATEGORIES.slice(0, 6).map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>`;

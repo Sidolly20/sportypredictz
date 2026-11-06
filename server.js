@@ -149,7 +149,8 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
     return route(async ({ ctx, board }) => {
       if (!m) return null;
       const related = board.matches.filter((x) => x.league.id === m.league.id && x.id !== m.id).slice(0, 5);
-      return V.matchPage(ctx, { m: ctx.scoresFor(m), related });
+      const standings = await withTimeout(getStandings(m.league), 4000, null);
+      return V.matchPage(ctx, { m: ctx.scoresFor(m), related, standings });
     }, { maxAge: 45 })(req, res);
   } catch (err) {
     console.error("Match error:", err.message);
