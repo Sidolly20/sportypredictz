@@ -80,12 +80,105 @@ const recStrip = (rec) => rec.total ? `<div class="recbar"><b>${rec.won}<i>/${re
 const MK_LABELS = { "1x2": ["1", "X", "2"], goals: ["O1.5", "O2.5", "U2.5", "O3.5"], btts: ["GG", "NG"], dc: ["1X", "12", "X2"] };
 const mkHeader = () => `<span class="mkh">${Object.entries(MK_LABELS).map(([id, l]) => `<span class="mkh-${id}" style="--n:${l.length}">${l.map((x) => `<i>${x}</i>`).join("")}</span>`).join("")}</span>`;
 
+
+// ---------- live SEO copy: rewritten from the real data on every page load ----------
+const plural = (n, w) => `${n} ${n === 1 ? w : w === "match" ? "matches" : w + "s"}`;
+const avgPct = (items) => items.length ? Math.round(items.reduce((a, b) => a + b.pct, 0) / items.length) : null;
+function leagueFacts(league, matches, ctx, standings) {
+  const name = league.name;
+  const now = matches.filter((m) => resOf(m).state === "live" || resOf(m).state === "wait");
+  const done = matches.filter((m) => resOf(m).state === "ft");
+  const ahead = matches.filter((m) => resOf(m).state === "pre");
+  const today = ahead.filter((m) => dayKey(m.ts) === todayKey());
+  const best = rankPicks("banker-picks", ahead)[0] || null;
+  const o25 = rankPicks("over-2-5-goals", ahead);
+  const bt = rankPicks("both-teams-to-score", ahead);
+  const recs = ((ctx.record && ctx.record.list) || []).filter((r) => r.m.league.name === name);
+  const won = recs.filter((r) => r.state === "won").length;
+  const lead = standings && standings.groups && standings.groups[0] && standings.groups[0].rows[0];
+  return { name, now, done, ahead, today, best, o25, bt, recs, won, lead };
+}
+// Same facts, different wording: the variant is picked from a seed (league + day + what is happening),
+// so a page reads the same on every refresh but differs between leagues and between days.
+const hash = (str) => { let h = 7; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const say = (seed, list) => list[hash(seed) % list.length];
+const vs = (m) => `${m.home.name} v ${m.away.name}`;
+const scoreTxt = (m) => `${m.home.name} ${scNum(m, "h")}–${scNum(m, "a")} ${m.away.name}`;
+const joinAnd = (arr) => arr.length < 2 ? arr.join("") : `${arr.slice(0, -1).join(", ")} and ${arr[arr.length - 1]}`;
+function leagueStory(league, matches, ctx, standings) {
+  const f = leagueFacts(league, matches, ctx, standings);
+  const n = f.name, seed = `${league.id}|${todayKey()}`;
+  const ps = [];
+  // 1. the situation right now
+  if (f.now.length) {
+    const m = f.now[0];
+    const lead = Number(resOf(m).h) - Number(resOf(m).a);
+    const tp = topPick(m);
+    const ps0 = tp ? pickState(m, tp.k) : null;
+    const tail = ps0 === "on" ? ` Our pick, ${tp.label}, is winning at the moment.` : ps0 === "off" ? ` Our pick, ${tp.label}, is behind right now.` : "";
+    ps.push(f.now.length === 1
+      ? say(seed + "a", [`${scoreTxt(m)} is being played right now (${resOf(m).label || "live"}).${tail}`, `Play is under way in ${n}: ${scoreTxt(m)}, ${resOf(m).label || "live"}.${tail}`])
+      : say(seed + "b", [`${f.now.length} ${n} games are on right now, and the scores are updating as we go.`, `It's a live day in the ${n}: ${f.now.length} matches are in play at this moment.`]));
+    if (f.now.length > 1) ps.push(`In play: ${joinAnd(f.now.slice(0, 4).map((x) => `${scoreTxt(x)} (${resOf(x).label || "live"})`))}.`);
+    void lead;
+  } else if (f.today.length) {
+    const first = f.today[0];
+    ps.push(say(seed + "c", [
+      `${f.today.length === 1 ? "One" : f.today.length} ${n} ${f.today.length === 1 ? "game is" : "games are"} still to come today. First up is ${vs(first)} at ${clock(first.ts)}.`,
+      `Nothing has kicked off in the ${n} yet. ${vs(first)} starts the day at ${clock(first.ts)}.`,
+      `Still waiting on ${n} action today: ${vs(first)} is the first kick-off, at ${clock(first.ts)}.`
+    ]));
+  } else if (f.ahead.length) {
+    const nx = f.ahead[0];
+    ps.push(say(seed + "d", [
+      `There's no ${n} football today. The next game is ${vs(nx)} on ${shortDate(nx.ts)} at ${clock(nx.ts)}.`,
+      `A quiet spell for the ${n}: ${vs(nx)} on ${shortDate(nx.ts)} (${clock(nx.ts)}) is next on the list.`
+    ]));
+  } else if (!f.done.length) {
+    ps.push(`We don't have any ${n} fixtures loaded right now. Check back soon, this page fills itself in when they appear.`);
+  }
+  // 2. what has finished
+  if (f.done.length) {
+    ps.push(say(seed + "e", [`Already finished: ${joinAnd(f.done.slice(0, 4).map(scoreTxt))}.`, `Full-time scores so far: ${joinAnd(f.done.slice(0, 4).map(scoreTxt))}.`]));
+  }
+  // 3. our best pick
+  if (f.best) {
+    const pct = Math.round(f.best.pct), odd = f.best.odd ? fmtOdd(f.best.odd) : null;
+    ps.push(say(seed + "f", [
+      `Our strongest ${n} pick is ${f.best.label} in ${vs(f.best.m)}. The model rates it at ${pct}%${odd ? ` and the price is ${f.best.calc ? "about " : ""}${odd}` : ""}.`,
+      `If you only look at one ${n} game, make it ${vs(f.best.m)}. We like ${f.best.label} (${pct}%)${odd ? `, priced at ${f.best.calc ? "about " : ""}${odd}` : ""}.`,
+      `${vs(f.best.m)} gives us the clearest call in the ${n}: ${f.best.label}, ${pct}% on our numbers${odd ? `, odds ${f.best.calc ? "about " : ""}${odd}` : ""}.`
+    ]));
+  }
+  // 4. goals
+  const g = avgPct(f.o25), b = avgPct(f.bt);
+  if (g !== null && b !== null) {
+    const mood = g >= 60 ? "Expect goals" : g >= 50 ? "Leaning towards goals" : g >= 40 ? "Goals are close to a coin flip" : "This looks like a tighter round";
+    ps.push(`${mood}: the model puts over 2.5 goals at ${g}% on average across the upcoming ${n} games, and both teams to score at ${b}%.`);
+  }
+  // 5. the table
+  if (f.lead) ps.push(say(seed + "g", [`${f.lead.team} are top of the ${n} table on ${f.lead.pts ?? "–"} points after ${f.lead.p ?? "–"} games.`, `At the top of the table it's ${f.lead.team}, ${f.lead.pts ?? "–"} points from ${f.lead.p ?? "–"} played.`]));
+  // 6. honesty about our record
+  if (f.recs.length) ps.push(`How we've done here lately: ${f.won} of ${f.recs.length} ${n} picks came in.`);
+  return { ps, f };
+}
+const storyHtml = (st) => `<section class="story" aria-label="${esc(st.f.name)} update"><h2>${esc(st.f.name)} update</h2>${st.ps.map((p) => `<p>${esc(p)}</p>`).join("")}<small class="mono">Written from live data · refreshed ${esc(clock(Date.now()))}</small></section>`;
+const lgNote = (g) => {
+  const f = leagueFacts(g.league, g.matches, { record: null }, null);
+  const bits = [];
+  if (f.now.length) bits.push(`<b class="hot">${f.now.length} live</b>`);
+  if (f.done.length) bits.push(`${f.done.length} finished`);
+  if (f.ahead.length) bits.push(`${f.ahead.length} to play`);
+  if (f.best) bits.push(`top pick <b>${esc(f.best.label)}</b> ${Math.round(f.best.pct)}%`);
+  return bits.length ? `<p class="lgnote">${bits.join(" · ")}</p>` : "";
+};
+
 function leagueBlock(g, { limit = 0, moreHref = "", open = true } = {}) {
   const list = limit ? g.matches.slice(0, limit) : g.matches;
   const more = limit && g.matches.length > limit ? `<a class="seemore" href="${moreHref || leaguePath(g.league)}">All ${g.matches.length} matches in ${esc(g.league.name)} →</a>` : "";
   return `<details class="lgblock" id="lg-${esc(g.league.id ?? "x")}"${open ? " open" : ""}>
     <summary class="lghead"><span class="lhl">${lgIcon(g.league)}<span class="lname">${esc(g.league.name)}</span><span class="n">${g.matches.length}</span></span>${mkHeader()}<i class="chev" aria-hidden="true"></i></summary>
-    ${list.map(matchRow).join("")}${more}
+    ${lgNote(g)}${list.map(matchRow).join("")}${more}
   </details>`;
 }
 const leagueBlocks = (groups, o = {}) => groups.map((g, i) => leagueBlock(g, { ...o, open: i < (o.openN ?? 7) })).join("");
@@ -303,6 +396,24 @@ function heroTiles(ctx, pod, liveItems, upcoming) {
   return `<section class="hero" aria-label="Highlights">${podTile}${liveTile}${recTile}</section>`;
 }
 
+function homeStory(matches, groups, liveItems, ctx) {
+  const ahead = matches.filter((m) => !m.res || m.res.state === "pre");
+  const done = matches.filter((m) => m.res && m.res.state === "ft");
+  const best = rankPicks("banker-picks", ahead).slice(0, 3);
+  const todayN = matches.filter((m) => dayKey(m.ts) === todayKey()).length || matches.length;
+  const seed = `home|${todayKey()}`;
+  const ps = [say(seed, [
+    `${plural(todayN, "match")} across ${plural(groups.length, "league")} on the board for ${longDate(Date.now())}${liveItems.length ? `, and ${liveItems.length} ${liveItems.length === 1 ? "is" : "are"} live right now` : ""}.`,
+    `Here's the picture for ${longDate(Date.now())}: ${plural(todayN, "match")}, ${plural(groups.length, "league")}${liveItems.length ? `, ${liveItems.length} in play` : ""}${done.length ? `, ${done.length} already finished` : ""}.`
+  ])];
+  if (liveItems.length) ps.push(`In play now: ${joinAnd(liveItems.slice(0, 5).map((m) => `${scoreTxt(m)} (${resOf(m).label || "live"})`))}.`);
+  if (best.length) ps.push(say(seed + "b", [
+    `The model's firmest calls right now: ${joinAnd(best.map((b2) => `${b2.label} in ${vs(b2.m)} (${Math.round(b2.pct)}%)`))}.`,
+    `Safest-looking picks at the moment: ${joinAnd(best.map((b2) => `${vs(b2.m)}, ${b2.label} (${Math.round(b2.pct)}%)`))}.`
+  ]));
+  if (ctx.record && ctx.record.total) ps.push(`We keep score on ourselves: ${ctx.record.won} of our last ${ctx.record.total} finished picks won${ctx.record.rate !== null ? ` (${ctx.record.rate}%)` : ""}.`);
+  return `<section class="story"><h2>Today's football picture</h2>${ps.map((p) => `<p>${esc(p)}</p>`).join("")}<small class="mono">Written from live data · refreshed ${esc(clock(Date.now()))}</small></section>`;
+}
 export function homePage(ctx, { matches, live, updatedAt }) {
   const today = todayKey();
   const todays = matches.filter((m) => dayKey(m.ts) === today);
@@ -327,6 +438,7 @@ export function homePage(ctx, { matches, live, updatedAt }) {
   ${ctx.record && ctx.record.total ? `<section class="block"><div class="block-head"><h2>Recent results</h2><a href="/results">All results →</a></div><div class="pickrail">${ctx.record.list.slice(0, 8).map(recCard).join("")}</div></section>` : ""}
   <section class="block"><div class="block-head"><h2>Browse by bet type</h2><a href="/predictions">All ${CATEGORIES.length} categories →</a></div>${catCards(counts, { featured: true })}</section>
   <section class="block"><div class="block-head"><h2>Leagues</h2><a href="/leagues">All leagues →</a></div><div class="leaguegrid">${ctx.leagues.slice(0, 12).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>
+  ${homeStory(matches, groups, liveItems, ctx)}
   <section class="prose"><h2>How we make football predictions</h2>${HOME.how.map((p) => `<p>${esc(p)}</p>`).join("")}<p><a href="/how-it-works">Read how to read the numbers →</a></p></section>
   ${faqHtml(HOME.faq)}`;
   return {
@@ -432,15 +544,17 @@ export function leaguePage(ctx, { league, matches, standings, allLeagues }) {
   const groups = groupByLeague(matches);
   const picks = rankPicks("banker-picks", matches).slice(0, 4);
   const table = standingsTable(standings);
+  const st = leagueStory(league, matches, ctx, standings);
   const body = `${crumbs([["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])}
   <header class="pagehead lghero">${lgIcon(league)}<div><h1>${esc(league.name)} predictions, odds and table</h1><p>${matches.length ? `${matches.length} upcoming matches with odds and model probabilities.` : "No upcoming matches are loaded for this league right now."}</p></div></header>
   ${picks.length ? `<section class="block"><div class="block-head"><h2>Best picks in ${esc(league.name)}</h2></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
+  ${storyHtml(st)}
   <section class="block"><div class="block-head"><h2>Upcoming matches</h2></div>${matches.length ? toolbar(groups) + groups.map((g) => leagueBlock(g)).join("") : `<div class="empty">Nothing scheduled in the next few days.</div>`}</section>
   <section class="block"><div class="block-head"><h2>${esc(league.name)} table</h2></div>${table || `<div class="empty">A table is not available for this league yet.</div>`}</section>
   <section class="block"><div class="block-head"><h2>Other leagues</h2></div><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>`;
   return {
     title: `${league.name} Predictions, Odds and Table | ${SITE_NAME}`,
-    desc: `${league.name} football predictions with odds, over/under goals and both teams to score picks for every upcoming match, plus the latest league table.`,
+    desc: `${league.name} predictions for ${longDate(Date.now())}: ${st.f.now.length ? `${st.f.now.length} live now, ` : ""}${st.f.today.length || st.f.ahead.length} to play${st.f.best ? `, top pick ${st.f.best.label} (${Math.round(st.f.best.pct)}%)` : ""}. Odds, over 2.5 goals, both teams to score and the latest table.`.slice(0, 300),
     path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])]
   };
 }
