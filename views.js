@@ -634,7 +634,39 @@ function standingsTable(st) {
   }).join("")}</tbody></table></div>`).join("");
 }
 
-export function leaguePage(ctx, { league, matches, standings, allLeagues }) {
+// ---------- v4.7: climbers and sinkers, and the week in review ----------
+function moversHtml(standings, snapshot) {
+  if (!snapshot || !snapshot.rows || !snapshot.rows.length) return "";
+  const now = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p);
+  if (now.length < 4) return "";
+  const before = new Map(snapshot.rows.map((r) => [r.team, r.pos]));
+  const moves = now.map((r) => ({ team: r.team, to: r.pos, from: before.get(r.team), by: before.has(r.team) ? before.get(r.team) - r.pos : null })).filter((x) => x.by !== null);
+  const up = moves.filter((x) => x.by > 0).sort((a, b) => b.by - a.by).slice(0, 3);
+  const down = moves.filter((x) => x.by < 0).sort((a, b) => a.by - b.by).slice(0, 3);
+  if (!up.length && !down.length) return "";
+  const line = (x) => `<div class="v4-mv ${x.by > 0 ? "up" : "down"}"><span class="v4-arrow">${x.by > 0 ? "▲" : "▼"}</span><span class="v4-mvname">${esc(x.team)}</span><span class="v4-mvchg">${x.from} → ${x.to}</span><b>${Math.abs(x.by)}</b></div>`;
+  const lead = up[0] ? `${esc(up[0].team)} climbed ${up[0].by} ${up[0].by === 1 ? "place" : "places"}` : "";
+  const drop = down[0] ? `${esc(down[0].team)} dropped ${Math.abs(down[0].by)} ${Math.abs(down[0].by) === 1 ? "place" : "places"}` : "";
+  return `<section class="block v4-movers"><div class="v4-mhead"><h2>Climbers and sinkers</h2><small>vs. ${esc(snapshot.day)}</small></div>
+    ${up.length ? `<div class="v4-mvgroup"><small>Climbing</small>${up.map(line).join("")}</div>` : ""}
+    ${down.length ? `<div class="v4-mvgroup"><small>Sinking</small>${down.map(line).join("")}</div>` : ""}
+    <p class="v4-cap">${[lead, drop].filter(Boolean).join(". ")}${lead || drop ? "." : ""}</p></section>`;
+}
+
+function weekHtml(league, recent, upcoming, ctx) {
+  const now = Date.now();
+  const last = recent.filter((m) => m.ts >= now - 7 * 864e5 && Number.isFinite(resOf(m).h) && Number.isFinite(resOf(m).a)).sort((a, b) => b.ts - a.ts);
+  const soon = upcoming.filter((m) => m.ts >= now && m.ts <= now + 4 * 864e5).sort((a, b) => a.ts - b.ts).slice(0, 6);
+  if (!last.length && !soon.length) return "";
+  const goals = last.reduce((s, m) => s + resOf(m).h + resOf(m).a, 0);
+  const margin = last.reduce((best, m) => (Math.abs(resOf(m).h - resOf(m).a) > Math.abs(resOf(best).h - resOf(best).a) ? m : best), last[0]);
+  const res = last.length ? `<div class="v4-wk-results">${last.slice(0, 8).map((m) => `<div class="v4-wk-r"><span>${esc(m.home.name)}</span><b>${resOf(m).h}–${resOf(m).a}</b><span class="right">${esc(m.away.name)}</span></div>`).join("")}</div>` : "";
+  const facts = last.length ? `<p class="v4-cap">${last.length} ${last.length === 1 ? "result" : "results"} in the last seven days, ${goals} goals (${(goals / last.length).toFixed(1)} a game). Biggest margin: ${esc(margin.home.name)} ${resOf(margin).h}–${resOf(margin).a} ${esc(margin.away.name)}.</p>` : "";
+  const next = soon.length ? `<div class="v4-sub">Coming up</div><div class="v4-wk-next">${soon.map((m) => { const p = m.prediction; const top = p ? Math.max(num(p.home_win_pct) || 0, num(p.draw_pct) || 0, num(p.away_win_pct) || 0) : null; return `<div class="v4-wk-n"><span>${esc(m.home.name)} <i>v</i> ${esc(m.away.name)}</span><small>${esc(shortDate(m.ts))} · ${esc(clock(m.ts))}${top !== null ? ` · top ${Math.round(top)}%` : ""}</small></div>`; }).join("")}</div>` : "";
+  return `<section class="block v4-week"><div class="v4-mhead"><h2>The week in ${esc(league.name)}</h2></div>${res}${facts}${next}</section>`;
+}
+
+export function leaguePage(ctx, { league, matches, standings, allLeagues, recent = [], snapshot = null }) {
   const path = leaguePath(league);
   const groups = groupByLeague(matches);
   const picks = rankPicks("banker-picks", matches).slice(0, 4);
@@ -643,7 +675,9 @@ export function leaguePage(ctx, { league, matches, standings, allLeagues }) {
   const body = `${crumbs([["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])}
   <header class="pagehead lghero">${lgIcon(league)}<div><h1>${esc(league.name)} predictions, odds and table</h1><p>${matches.length ? `${matches.length} upcoming matches with odds and model probabilities.` : "No upcoming matches are loaded for this league right now."}</p></div></header>
   ${picks.length ? `<section class="block"><div class="block-head"><h2>Best picks in ${esc(league.name)}</h2></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
-  ${leaguePulse(league, matches, standings, ctx)}
+  ${leaguePulse(league, [...matches, ...recent], standings, ctx)}
+  ${weekHtml(league, recent, matches, ctx)}
+  ${moversHtml(standings, snapshot)}
   <section class="block"><div class="block-head"><h2>Upcoming matches</h2></div>${matches.length ? toolbar(groups) + groups.map((g) => leagueBlock(g)).join("") : `<div class="empty">Nothing scheduled in the next few days.</div>`}</section>
   <section class="block"><div class="block-head"><h2>${esc(league.name)} table</h2></div>${table || `<div class="empty">A table is not available for this league yet.</div>`}</section>
   <section class="block"><div class="block-head"><h2>Other leagues</h2></div><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>`;
@@ -1042,7 +1076,87 @@ function leaguePulse(league, matches, standings, ctx) {
   return leagueLayoutHtml(league, matches, standings, ctx);
 }
 
-export function matchPage(ctx, { m, related, standings = null }) {
+// ---------- match lifecycle: what the page says before, during, at half-time and after the match ----------
+function matchStage(m) {
+  const rs = resOf(m);
+  if (rs.state === "ft") return "ft";
+  if (rs.state === "live") return /ht|half|break/i.test(String(rs.label || "")) ? "ht" : "live";
+  if (rs.state === "wait") return "live";
+  return "pre";
+}
+
+// Table after this result: each side's new points and position, from the standings we already fetch.
+function tableAfter(m, rows, h, a) {
+  const add = (pts, gf, ga) => (gf > ga ? 3 : gf === ga ? 1 : 0) + pts;
+  const sorted = [...rows].sort((x, y) => x.pos - y.pos);
+  const newPts = new Map(sorted.map((r) => [r.team, r.pts]));
+  const before = (team) => sorted.find((r) => r.team === team);
+  const hb = before(m.home.name), ab = before(m.away.name);
+  if (!hb || !ab) return null;
+  newPts.set(m.home.name, hb.pts + (h > a ? 3 : h === a ? 1 : 0));
+  newPts.set(m.away.name, ab.pts + (a > h ? 3 : a === h ? 1 : 0));
+  const ranked = [...newPts.entries()].sort((x, y) => y[1] - x[1]).map((x) => x[0]);
+  return { home: { pts: newPts.get(m.home.name), before: hb.pos, after: ranked.indexOf(m.home.name) + 1 }, away: { pts: newPts.get(m.away.name), before: ab.pos, after: ranked.indexOf(m.away.name) + 1 } };
+}
+
+function nextLine(team, n) {
+  if (!n) return "";
+  const home = n.home.name === team;
+  const opp = home ? n.away.name : n.home.name;
+  const p = n.prediction;
+  const chance = p ? Math.round(home ? num(p.home_win_pct) : num(p.away_win_pct)) : null;
+  return `<div class="v4-next"><small>${esc(team)} next</small><b>${home ? "" : "at "}${esc(opp)}${home ? " (home)" : ""}</b><span>${esc(shortDate(n.ts))} · ${esc(clock(n.ts))}${chance !== null ? ` · model ${chance}% for ${esc(team)}` : ""}</span></div>`;
+}
+
+function matchStageHtml(m, standings, nextFor) {
+  const stage = matchStage(m);
+  const rs = resOf(m);
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  const xg = m.prediction && m.prediction.expected_goals;
+  const totalXg = xg ? num(xg.home) + num(xg.away) : null;
+  const pick = topPick(m);
+  const ps = pick ? pickState(m, pick.k) : null;
+  const outcome = (h, a) => (h > a ? `${m.home.name} won` : h < a ? `${m.away.name} won` : "a draw");
+  const nexts = nextFor ? `<div class="v4-nexts">${nextLine(m.home.name, nextFor.home)}${nextLine(m.away.name, nextFor.away)}</div>` : "";
+  let title = "", body = "";
+
+  if (stage === "pre") {
+    title = "Before kick-off";
+    const form = (team) => { const r = rows.find((x) => x.team === team); return r && typeof r.form === "string" ? [...r.form.slice(-5).toUpperCase()].map((c) => `<i class="${c === "W" ? "w" : c === "D" ? "d" : "l"}"></i>`).join("") : ""; };
+    const fh = form(m.home.name), fa = form(m.away.name);
+    body = `${fh || fa ? `<div class="v4-formpair"><div><small>${esc(m.home.name)}</small><span class="v4-dots">${fh}</span></div><div class="right"><small>${esc(m.away.name)}</small><span class="v4-dots">${fa}</span></div></div>` : ""}
+      ${totalXg !== null ? `<p class="v4-cap">The model expects ${totalXg.toFixed(1)} goals in this match.</p>` : ""}`;
+  } else if (stage === "live") {
+    title = "In play";
+    const minuteNote = rs.label ? esc(rs.label) : "In play";
+    const goals = (rs.h ?? 0) + (rs.a ?? 0);
+    body = `<div class="v4-score"><b>${rs.h ?? "–"}</b><span>${esc(m.home.name)}</span><span>${esc(m.away.name)}</span><b>${rs.a ?? "–"}</b></div>
+      <p class="v4-cap">${minuteNote}. ${totalXg !== null ? `${goals} goal${goals === 1 ? "" : "s"} so far against ${totalXg.toFixed(1)} the model expected for the full game.` : ""}${ps ? ` Our pick is ${ps === "on" ? "winning" : ps === "off" ? "losing" : "still open"}.` : ""}</p>`;
+  } else if (stage === "ht") {
+    title = "Half-time";
+    const lead = rs.h > rs.a ? m.home.name : rs.a > rs.h ? m.away.name : null;
+    const trail = lead ? (lead === m.home.name ? m.away.name : m.home.name) : null;
+    const remaining = totalXg !== null ? Math.max(0, totalXg - ((rs.h ?? 0) + (rs.a ?? 0))) : null;
+    body = `<div class="v4-score"><b>${rs.h ?? "–"}</b><span>${esc(m.home.name)}</span><span>${esc(m.away.name)}</span><b>${rs.a ?? "–"}</b></div>
+      <p class="v4-cap">${lead ? `${esc(lead)} lead, so ${esc(trail)} need to change the game in the second half.` : "Level at the break."}${remaining !== null ? ` The model had about ${remaining.toFixed(1)} goals left in the match from this point.` : ""}${ps ? ` Our pick is ${ps === "on" ? "winning" : ps === "off" ? "losing" : "still open"}.` : ""}</p>`;
+  } else if (stage === "ft") {
+    title = "Full-time";
+    const ta = rows.length ? tableAfter(m, rows, rs.h, rs.a) : null;
+    const p = m.prediction;
+    const likely = p ? [[m.home.name, num(p.home_win_pct)], ["a draw", num(p.draw_pct)], [m.away.name, num(p.away_win_pct)]].filter((x) => x[1] !== null).sort((x, y) => y[1] - x[1])[0] : null;
+    const total = (rs.h ?? 0) + (rs.a ?? 0);
+    const verdict = pick ? (ps === "won" ? "Our pick landed." : "Our pick did not land.") : "";
+    body = `<div class="v4-score"><b>${rs.h}</b><span>${esc(m.home.name)}</span><span>${esc(m.away.name)}</span><b>${rs.a}</b></div>
+      <p class="v4-cap">${esc(outcome(rs.h, rs.a))}. ${likely ? `Before kick-off the model's most likely result was ${esc(likely[0])} at ${Math.round(likely[1])}%.` : ""} ${totalXg !== null ? `${total} goals against ${totalXg.toFixed(1)} expected.` : ""} ${verdict}</p>
+      ${ta ? `<div class="v4-table-after"><div><small>${esc(m.home.name)}</small><b>${ta.home.before} → ${ta.home.after}</b><span>${ta.home.pts} pts</span></div><div class="right"><small>${esc(m.away.name)}</small><b>${ta.away.before} → ${ta.away.after}</b><span>${ta.away.pts} pts</span></div></div>` : ""}`;
+  }
+  if (!body && stage === "pre") body = "";
+  if (!title) return "";
+  const next = stage === "ft" && nexts ? `<div class="v4-sub">Next</div>${nexts}` : "";
+  return `<section class="block v4-stage v4-st-${stage}"><div class="v4-stg-h">${esc(title)}</div>${body}${next}</section>`;
+}
+
+export function matchPage(ctx, { m, related, standings = null, nextFor = null }) {
   const path = matchPath(m);
   const p = m.prediction;
   const mk = marketsOf(m);
@@ -1069,6 +1183,7 @@ export function matchPage(ctx, { m, related, standings = null }) {
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}
   </section>
   ${compareTable(m) ? `<section class="block"><h2>${esc(m.home.name)} vs ${esc(m.away.name)}: comparison</h2><div class="tablewrap">${compareTable(m)}</div><p class="mnote show">The greener side leads on that line. Edge is model chance × odds − 1.</p></section>` : ""}
+  ${matchStageHtml(m, standings, nextFor)}
   ${matchLayoutHtml(m, standings)}
   <details class="v4-more"><summary>Full match analysis<span>Tap to read</span></summary><div class="v4-prose">${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</div></details>
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}

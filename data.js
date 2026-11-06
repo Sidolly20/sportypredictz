@@ -5,7 +5,7 @@
 import { demoWindow, demoLive, demoResults, demoStandings } from "./demo.js";
 import { normMatch, num, todayKey, addDays, topPick, judge } from "./logic.js";
 import { fetchRecord, summarise } from "./pickLog.js";
-import { saveMatches, saveResults, loadMatchesBetween, loadMatch, loadFinished, STORE_ON, storeStatus } from "./store.js";
+import { saveMatches, saveResults, loadMatchesBetween, loadMatch, loadFinished, saveSnapshot, STORE_ON, storeStatus } from "./store.js";
 
 export const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
 export const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
@@ -314,7 +314,7 @@ export async function getStandings(league) {
     try {
       const d = await callOddsApi(`/v1/standings/league/${league.id}`, 600);
       const groups = extractGroups({ ...d, league_id: undefined, season_id: undefined, stale: undefined });
-      if (groups.length) value = { groups, season: d.season?.name ?? d.season ?? null };
+      if (groups.length) { value = { groups, season: d.season?.name ?? d.season ?? null }; saveSnapshot(league.id, groups); }
     } catch { /* fall through to the stored tables */ }
 
     if (!value) {

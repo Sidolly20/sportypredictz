@@ -41,3 +41,12 @@ alter table match_store add column if not exists updated_at timestamptz default 
 create index if not exists match_store_day on match_store (day);
 create index if not exists match_store_final_day on match_store (final, day);
 alter table match_store enable row level security;   -- locked: only the server's service key can read/write
+
+-- Daily standings snapshot: one row per league per day, used for "climbers and sinkers" over a week.
+create table if not exists standings_snapshot (
+  league_id  bigint not null,
+  snap_day   text not null,            -- site-timezone date, e.g. 2026-11-06
+  rows       jsonb not null,           -- [{team, pos, p, pts, gd}, ...]
+  primary key (league_id, snap_day)
+);
+alter table standings_snapshot enable row level security;   -- locked: only the server's service key can read/write

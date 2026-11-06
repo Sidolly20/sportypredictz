@@ -107,6 +107,7 @@ export async function pruneStore() {
   try {
     const cut = dayKey(Date.now() - KEEP_DAYS * 864e5);
     await sb(`${TABLE}?day=lt.${cut}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    await sb(`${BASE}/rest/v1/standings_snapshot?snap_day=lt.${dayKey(Date.now() - 60 * 864e5)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
   } catch (e) { storeStatus.lastError = e.message; }
 }
 
@@ -114,4 +115,33 @@ export function startStoreJanitor() {
   if (!STORE_ON) return;
   setTimeout(pruneStore, 60 * 1000).unref?.();
   setInterval(pruneStore, 6 * 3600 * 1000).unref?.();
+}
+
+// ---------- daily standings snapshots (for climbers and sinkers) ----------
+const snapSaved = new Set(); // league|day already saved in this process
+export async function saveSnapshot(leagueId, groups) {
+  if (!STORE_ON || leagueId == null || !groups || !groups.length) return;
+  const day = dayKey(Date.now());
+  const key = `${leagueId}|${day}`;
+  if (snapSaved.has(key)) return;
+  snapSaved.add(key);
+  const rows = (groups[0].rows || []).map((r) => ({ team: r.team, pos: r.pos, p: r.p, pts: r.pts, gd: Number.isFinite(r.gd) ? r.gd : null }));
+  if (rows.length < 4) return;
+  try {
+    await sb(`${BASE}/rest/v1/standings_snapshot?on_conflict=league_id,snap_day`, {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ league_id: Number(leagueId), snap_day: day, rows }])
+    });
+  } catch (e) { storeStatus.lastError = e.message; }
+}
+
+// The most recent snapshot on or before (today minus daysAgo). Returns null if none exists yet.
+export async function loadSnapshotNear(leagueId, daysAgo = 7) {
+  if (!STORE_ON || leagueId == null) return null;
+  try {
+    const target = dayKey(Date.now() - daysAgo * 864e5);
+    const rows = await sb(`${BASE}/rest/v1/standings_snapshot?league_id=eq.${Number(leagueId)}&snap_day=lte.${target}&select=snap_day,rows&order=snap_day.desc&limit=1`);
+    return rows && rows[0] ? { day: rows[0].snap_day, rows: rows[0].rows } : null;
+  } catch (e) { storeStatus.lastError = e.message; return null; }
 }

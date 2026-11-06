@@ -862,3 +862,52 @@ details.v4-more[open] > summary::after { content: "–"; }
 .v4-hub { fill: var(--acid); }
 .v4-gl { display: flex; justify-content: space-between; font-size: .76rem; color: var(--mute); margin-top: 4px; gap: 6px; }
 @keyframes v4grow { from { width: 0 !important; } }
+
+/* ===================== v4.6 match lifecycle ===================== */
+.v4-stage { margin-top: 22px; padding: 16px; border-radius: 18px; background: linear-gradient(165deg, rgba(21,31,43,0.94), rgba(15,23,32,0.94)); border: 1px solid var(--line); display: grid; gap: 12px; }
+.v4-stg-h { font-family: var(--display); font-weight: 800; font-size: 1.05rem; text-transform: uppercase; letter-spacing: .04em; color: var(--acid); }
+.v4-st-live .v4-stg-h { color: var(--hot); }
+.v4-st-ht .v4-stg-h { color: var(--gold); }
+.v4-st-ft .v4-stg-h { color: var(--sky); }
+.v4-score { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 6px 12px; align-items: center; font-size: .9rem; font-weight: 600; }
+.v4-score b { font-family: var(--display); font-size: 2.4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.v4-formpair, .v4-table-after { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.v4-formpair .right, .v4-table-after .right { text-align: right; }
+.v4-formpair small, .v4-table-after small, .v4-next small { display: block; color: var(--mute); font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; }
+.v4-formpair .v4-dots { display: inline-flex; gap: 4px; margin-top: 4px; }
+.v4-formpair .v4-dots i { width: 14px; height: 14px; border-radius: 5px; display: block; }
+.v4-formpair .v4-dots i.w { background: var(--acid); }
+.v4-formpair .v4-dots i.d { background: var(--gold); }
+.v4-formpair .v4-dots i.l { background: rgba(255,77,109,0.85); }
+.v4-table-after b { display: block; font-family: var(--display); font-size: 1.6rem; margin-top: 2px; }
+.v4-table-after span { color: var(--mute); font-size: .78rem; }
+.v4-sub { font-size: .7rem; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; }
+.v4-nexts { display: grid; gap: 8px; }
+.v4-next { padding: 10px 12px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+.v4-next b { display: block; font-size: .95rem; margin-top: 2px; }
+.v4-next span { color: var(--mute); font-size: .78rem; }
+
+/* ===================== v4.7 movers and week in review ===================== */
+.v4-movers, .v4-week { margin-top: 22px; padding: 16px; border-radius: 18px; background: linear-gradient(165deg, rgba(21,31,43,0.94), rgba(15,23,32,0.94)); border: 1px solid var(--line); display: grid; gap: 12px; }
+.v4-mhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.v4-mhead h2 { font-size: 1.1rem; }
+.v4-mhead small { color: var(--mute); font-size: .72rem; }
+.v4-mvgroup { display: grid; gap: 6px; }
+.v4-mvgroup > small { color: var(--mute); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.v4-mv { display: grid; grid-template-columns: 22px minmax(0,1fr) auto 30px; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.v4-mv.up .v4-arrow { color: var(--acid); }
+.v4-mv.down .v4-arrow { color: var(--hot); }
+.v4-mv.up b { color: var(--acid); }
+.v4-mv.down b { color: var(--hot); }
+.v4-mvname { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v4-mvchg { color: var(--mute); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.v4-mv b { font-family: var(--display); font-size: 1.2rem; text-align: right; }
+.v4-wk-results { display: grid; gap: 6px; }
+.v4-wk-r { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--panel2); font-size: .86rem; font-weight: 600; }
+.v4-wk-r b { font-family: var(--display); font-size: 1.1rem; text-align: center; font-variant-numeric: tabular-nums; }
+.v4-wk-r .right { text-align: right; }
+.v4-wk-next { display: grid; gap: 6px; }
+.v4-wk-n { display: grid; gap: 2px; padding: 8px 10px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.v4-wk-n span { font-weight: 600; font-size: .9rem; }
+.v4-wk-n i { color: var(--mute); font-style: normal; font-weight: 400; }
+.v4-wk-n small { color: var(--mute); font-size: .74rem; }

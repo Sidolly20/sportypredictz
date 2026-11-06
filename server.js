@@ -14,7 +14,7 @@ import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLe
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
-import { storeStatus, startStoreJanitor } from "./store.js";
+import { storeStatus, startStoreJanitor, loadSnapshotNear } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -134,9 +134,13 @@ app.get("/leagues/:slug", route(async ({ req, ctx, board }) => {
   const id = parseLeagueSlug(req.params.slug);
   const league = id != null ? seenLeagues.get(id) : null;
   if (!league) return null;
-  const matches = board.matches.filter((m) => m.league.id === id);
+  const matches = board.matches.filter((m) => m.league.id === id).map(ctx.scoresFor);
   const standings = await withTimeout(getStandings(league), 12000, null);
-  return V.leaguePage(ctx, { league, matches, standings, allLeagues: ctx.leagues });
+  const seenIds = new Set(matches.map((m) => m.id));
+  const recent = ((await withTimeout(getResults(), 6000, { results: [] })).results || [])
+    .filter((x) => x.league && x.league.id === id && !seenIds.has(x.id)).map(ctx.scoresFor);
+  const snapshot = await withTimeout(loadSnapshotNear(id, 7), 4000, null);
+  return V.leaguePage(ctx, { league, matches, standings, allLeagues: ctx.leagues, recent, snapshot });
 }));
 
 app.get("/match/:id/:slug?", async (req, res, next) => {
@@ -150,7 +154,12 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
       if (!m) return null;
       const related = board.matches.filter((x) => x.league.id === m.league.id && x.id !== m.id).slice(0, 5);
       const standings = await withTimeout(getStandings(m.league), 4000, null);
-      return V.matchPage(ctx, { m: ctx.scoresFor(m), related, standings });
+      const later = board.matches.filter((x) => x.ts > m.ts && x.id !== m.id).sort((x, y) => x.ts - y.ts);
+      const nextFor = {
+        home: later.find((x) => x.home.name === m.home.name || x.away.name === m.home.name) || null,
+        away: later.find((x) => x.home.name === m.away.name || x.away.name === m.away.name) || null
+      };
+      return V.matchPage(ctx, { m: ctx.scoresFor(m), related, standings, nextFor });
     }, { maxAge: 45 })(req, res);
   } catch (err) {
     console.error("Match error:", err.message);
