@@ -5,6 +5,7 @@
 import { demoWindow, demoLive, demoResults, demoStandings } from "./demo.js";
 import { normMatch, num, todayKey, addDays, topPick, judge } from "./logic.js";
 import { fetchRecord, summarise } from "./pickLog.js";
+import { saveMatches, saveResults, loadMatchesBetween, loadMatch, loadFinished, STORE_ON, storeStatus } from "./store.js";
 
 export const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
 export const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
@@ -112,6 +113,7 @@ async function loadBoard() {
     board.matches = [...fresh.values()].sort((a, b) => a.ts - b.ts);
     board.updatedAt = Date.now();
     board.error = null;
+    saveMatches(board.matches);
   }
 }
 
@@ -122,10 +124,25 @@ function refreshBoard() {
   return board.loading;
 }
 
+// Cold start: show the matches we saved last time straight away, and refresh from odds-api in the background.
+let seeded = false;
+async function seedFromStore() {
+  if (DEMO || !STORE_ON || seeded) return;
+  seeded = true;
+  const start = todayKey();
+  const rows = await loadMatchesBetween(start, addDays(start, BOARD_DAYS - 1));
+  const cutoff = Date.now() - KEEP_STARTED_MS;
+  const list = rows.map(normMatch).filter((m) => m.ts >= cutoff);
+  if (!list.length) return;
+  board.matches = list.sort((a, b) => a.ts - b.ts);
+  board.updatedAt = Date.now() - BOARD_TTL_MS - 1; // stale on purpose: refresh right away
+}
+
 // Pages call this. Fresh enough -> instant. Stale -> instant, refresh in the background. Empty -> wait (up to 50s).
 export async function getBoard() {
   const age = Date.now() - board.updatedAt;
   if (board.updatedAt && age > BOARD_TTL_MS) refreshBoard();
+  if (!board.matches.length) await seedFromStore();
   if (!board.matches.length) {
     // Do not hammer odds-api: at most one fresh attempt every 20 seconds while empty.
     const p = board.loading || (Date.now() - board.lastAttempt > 20 * 1000 ? refreshBoard() : null);
@@ -181,22 +198,42 @@ export async function getResults() {
     const d = await callOddsApi("/v1/results?limit=50", 60);
     const results = (d.results || []).map(normMatch);
     hydrateStarted(results.filter((x) => x.ts >= Date.now() - 24 * 3600e3));
-    return { ...d, results };
+    saveResults(results);
+    return { ...d, results: await withStoredResults(results) };
   } catch {
-    return { results: [], error: true };
+    return { results: await withStoredResults([]), error: true };
   }
+}
+
+// Fresh results first, then anything finished we saved earlier that odds-api no longer lists.
+async function withStoredResults(fresh) {
+  const byId = new Map((await loadFinished(3)).map((m) => [Number(m.id), m]));
+  for (const m of fresh) byId.set(Number(m.id), m);
+  return [...byId.values()].sort((a, b) => b.ts - a.ts).slice(0, 100);
 }
 
 // ---------- single match ----------
 export async function getMatch(id) {
   const onBoard = board.matches.find((m) => m.id === id);
-  if (DEMO) return onBoard || null;
+  if (DEMO) {
+    if (onBoard) return onBoard;
+    const pool = [...(await getResults()).results, ...(await getLive()).matches].map(normMatch);
+    return pool.find((m) => m.id === id) || null;
+  }
+  const fromMemoryOrStore = async () => {
+    if (onBoard) return onBoard;
+    const saved = await loadMatch(id);
+    return saved ? normMatch(saved) : null;
+  };
   try {
     const d = await callOddsApi(`/v1/matches/${id}?include=odds,prediction`, 120);
-    if (!d.match) return onBoard || null;
-    return normMatch({ ...(onBoard || {}), ...d.match, odds: d.odds ?? onBoard?.odds ?? null, prediction: d.prediction ?? onBoard?.prediction ?? null });
+    if (!d.match) return fromMemoryOrStore();
+    const m = normMatch({ ...(onBoard || {}), ...d.match, odds: d.odds ?? onBoard?.odds ?? null, prediction: d.prediction ?? onBoard?.prediction ?? null });
+    saveMatches([m]);
+    return m;
   } catch (err) {
-    if (onBoard) return onBoard;
+    const found = await fromMemoryOrStore();
+    if (found) return found;
     if (err instanceof UpstreamError && err.code === 404) return null;
     throw err;
   }

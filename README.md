@@ -14,6 +14,7 @@ server.js, data.js, logic.js, content.js, views.js, demo.js, app.js, styles.css,
 | ODDS_API_BASE | no | defaults to https://odds-api-g6vq.onrender.com |
 | SITE_TZ | no | defaults to Africa/Lagos (used to decide what "today" is) |
 | BOARD_PAGES | no | pages of 20 matches loaded per day, default 3 |
+| STORE_KEEP_DAYS | no | how long saved matches are kept in Supabase, default 14 |
 
 Without a key the site shows clearly marked DEMO data and tells Google not to index it.
 
@@ -27,8 +28,21 @@ Prediction pages, FAQs, About, Terms and Privacy text are all in content.js.
 /api/status shows connection health. /sitemap.xml and /robots.txt are made automatically.
 
 ## Permanent record (Supabase, optional)
-1. Supabase → SQL Editor → run `supabase-setup.sql`.
+Check it worked (SQL Editor, one query at a time):
+select count(*) from pick_log;
+select final, count(*) from match_store group by final;
+
+Expect `match_store` to hold rows after the site has been up for a few minutes, with `final = false` for upcoming matches and `final = true` for finished ones. If a query says a column is missing, run `supabase-setup.sql` again.
+
+1. Supabase → SQL Editor → New query → paste all of `supabase-setup.sql` → Run. It is safe to run again: it only adds what is missing (for example, columns from an older version) and never deletes rows. Then run the check in the section below.
 2. Supabase → Project Settings → API: copy the Project URL and the `service_role` key.
 3. Render → SportyPredictz → Environment: add `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Save.
 4. Open `/api/status` — `pickLog` should say it is on.
 Picks are saved before kick-off and marked won/lost at full time.
+
+## Match store (Supabase, optional but recommended)
+With the same two Supabase variables, the site also keeps a copy of every match and result in the `match_store` table (created by `supabase-setup.sql`). If odds-api is asleep or down:
+- the home page still shows today's and tomorrow's matches straight after a restart,
+- match pages still open for matches the site has seen before,
+- recent results still show.
+Rows older than `STORE_KEEP_DAYS` (default 14) are removed automatically. `/api/status` shows `store` health.

@@ -577,6 +577,30 @@ function compareTable(m) {
   return `<table class="avb"><thead><tr><th>${esc(m.home.name)}</th><th>Comparison</th><th>${esc(m.away.name)}</th></tr></thead><tbody>${rows.map((r) => `<tr>${cell(r[1], r[2], r[3], r[4])}<td class="k">${esc(r[0])}</td>${cell(r[2], r[1], r[3], r[4])}</tr>`).join("")}</tbody></table>`;
 }
 
+// Three stages on one page: before kick-off (the sections below), live (score and our pick right now),
+// and after full time (what the model expected against what happened).
+const pctOf = (x) => (num(x) === null ? null : Math.round(num(x)));
+function stageBlock(m, pick, verdictState) {
+  const rs = resOf(m);
+  const hasScore = rs.h !== null && rs.h !== undefined;
+  if (rs.state === "live" && hasScore) {
+    const right = verdictState === "on" ? "is winning right now" : verdictState === "off" ? "is losing right now" : "is still open";
+    return `<section class="block live-now"><h2>Live now</h2><p>${esc(rs.label || "In play")}: ${rs.h}–${rs.a}. Our pick ${right}.</p><p class="mnote">The score on this page refreshes as the match goes on.</p></section>`;
+  }
+  if (rs.state === "ft" && hasScore) {
+    const p = m.prediction;
+    const outcome = rs.h > rs.a ? `${m.home.name} won` : rs.h < rs.a ? `${m.away.name} won` : "The match ended level";
+    const options = p ? [[m.home.name, pctOf(p.home_win_pct)], ["a draw", pctOf(p.draw_pct)], [m.away.name, pctOf(p.away_win_pct)]].filter((x) => x[1] !== null) : [];
+    const fav = options.sort((a, b) => b[1] - a[1])[0];
+    const picked = pick ? `Our pick was ${esc(pick.label)} at ${Math.round(pick.pct)}%${pick.odd ? ` (odds ${fmtOdd(pick.odd)})` : ""}, and it ${verdictState === "won" ? "landed" : "did not land"}.` : "";
+    return `<section class="block review"><h2>Expectation vs result</h2>
+      <p>Final score ${rs.h}–${rs.a}. ${esc(outcome)}.</p>
+      ${fav ? `<p>Before kick-off, the model's most likely outcome was ${esc(fav[0])}, at ${fav[1]}%.</p>` : ""}
+      ${picked ? `<p>${picked}</p>` : ""}</section>`;
+  }
+  return "";
+}
+
 export function matchPage(ctx, { m, related }) {
   const path = matchPath(m);
   const p = m.prediction;
@@ -598,6 +622,7 @@ export function matchPage(ctx, { m, related }) {
     <h1>${esc(title)}</h1>
   </header>
   ${b ? `<section class="verdict"><div><small>Model pick</small><b>${esc(b.label)}</b></div><div class="vpct">${Math.round(b.pct)}<small>%</small></div>${verdictState ? `<div><small>Result</small><span class="pst ${verdictState}">${PICK_TXT[verdictState]}</span></div>` : ""}${b.odd ? `<div><small>Market odds</small><b class="mono">${fmtOdd(b.odd)}</b></div>` : ""}</section>` : ""}
+  ${stageBlock(m, bs, verdictState)}
   ${p ? `<section class="block"><h2>Win probability</h2>${bar(m.home.name, p.home_win_pct)}${bar("Draw", p.draw_pct)}${bar(m.away.name, p.away_win_pct)}</section>` : ""}
   <section class="block"><h2>Odds and model chances</h2><p class="mnote show">Tap a price to add it to your pick slip.</p>
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}

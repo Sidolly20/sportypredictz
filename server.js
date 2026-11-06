@@ -14,6 +14,7 @@ import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLe
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
+import { storeStatus, startStoreJanitor } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -142,6 +143,7 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return next();
   try {
+    await getBoard(); // on a cold start, load the board first so the match can be found
     const m = await getMatch(id);
     if (m && req.params.slug !== slugify(`${m.home.name} vs ${m.away.name}`)) return res.redirect(301, matchPath(m));
     return route(async ({ ctx, board }) => {
@@ -151,7 +153,7 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
     }, { maxAge: 45 })(req, res);
   } catch (err) {
     console.error("Match error:", err.message);
-    return route(() => V.errorPage())(req, res);
+    return route(() => ({ ...V.errorPage(), status: 503 }), { maxAge: 0 })(req, res);
   }
 });
 
@@ -176,7 +178,7 @@ app.get("/api/live", async (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
-  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), pickLog: LOG_ON ? logStatus : "off (set SUPABASE_URL and SUPABASE_SERVICE_KEY to turn on)", ...status });
+  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), store: storeStatus, pickLog: LOG_ON ? logStatus : "off (set SUPABASE_URL and SUPABASE_SERVICE_KEY to turn on)", ...status });
 });
 
 // Debug: shows the SHAPE of a league table from odds-api (no keys, no secrets). Handy if a table looks empty.
@@ -211,10 +213,10 @@ app.get("/sitemap.xml", async (req, res) => {
     ["/leagues", 0.7], ["/live", 0.6], ["/results", 0.5],
     ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
     ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
-    ...board.matches.slice(0, 400).map((m) => [matchPath(m), 0.5])
+    ...board.matches.slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
   ];
   const day = today;
-  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr]) => `<url><loc>${origin}${p}</loc><lastmod>${day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);
+  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr, lm]) => `<url><loc>${origin}${p}</loc><lastmod>${lm || day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);
 });
 
 // ---------- the two browser files ----------
@@ -232,6 +234,7 @@ app.listen(PORT, () => {
   console.log(`SportyPredictz running on port ${PORT}`);
   console.log(DEMO ? "ODDS_API_KEY_SPORTY is not set: showing DEMO data (and hiding from Google)." : `Using odds-api at ${API_BASE}`);
   startBoardLoop();
+  startStoreJanitor();
   // Every 3 minutes, even with no visitors: save picks before kick-off and settle finished matches.
   const tick = async () => {
     try {
