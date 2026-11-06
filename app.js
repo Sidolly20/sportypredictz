@@ -175,6 +175,44 @@
     if (u) { delete favs[u.dataset.unfav]; store.set("sp_favs", favs); syncFavs(); renderFavPage(); }
   });
 
+  // ---------- live scores, full time and Won/Lost on the picks ----------
+  function judge(k, h, a, final) {
+    if (h === null || h === undefined || a === null || a === undefined) return null;
+    const t = h + a, draw = h === a;
+    const side = { "1": h > a, X: draw, "2": a > h, "1X": h >= a, X2: a >= h, "12": !draw }[k];
+    if (side !== undefined) return final ? (side ? "won" : "lost") : (side ? "on" : "off");
+    const line = { "O1.5": 1.5, "O2.5": 2.5, "O3.5": 3.5, "U2.5": 2.5 }[k];
+    if (line !== undefined) {
+      if (k[0] === "O") return t > line ? "won" : final ? "lost" : "wait";
+      return t > line ? "lost" : final ? "won" : "wait";
+    }
+    if (k === "GG") return h > 0 && a > 0 ? "won" : final ? "lost" : "wait";
+    if (k === "NG") return h > 0 && a > 0 ? "lost" : final ? "won" : "wait";
+    return null;
+  }
+  const PICK_TXT = { won: "Won", lost: "Lost", on: "Winning", off: "Losing", wait: "In play" };
+
+  function applyScores(map) {
+    if (!map) return;
+    $$("[data-sc]").forEach((el) => {
+      const s = map[el.dataset.sc];
+      if (!s) return;
+      const [state, h, a, label] = s;
+      el.dataset.state = state;
+      const top = $(".w-top", el);
+      if (top) {
+        top.removeAttribute("data-t");
+        top.textContent = el.hasAttribute("data-card") && h !== null ? `${label} ${h}\u2013${a}` : label;
+      }
+      $$(".sc", el).forEach((n) => { const v = n.dataset.side === "h" ? h : a; n.textContent = v === null || v === undefined ? "\u2013" : v; });
+      const ps = el.dataset.pk ? judge(el.dataset.pk, h, a, state === "ft") : null;
+      const chip = $(".pst", el);
+      if (chip) { chip.hidden = !ps; chip.className = "pst" + (ps ? " " + ps : ""); chip.textContent = ps ? PICK_TXT[ps] : ""; }
+      const mp = $(".odd.mp", el);
+      if (mp) { mp.classList.toggle("won", ps === "won"); mp.classList.toggle("lost", ps === "lost"); }
+    });
+  }
+
   // ---------- live scores ----------
   async function pollLive() {
     if (document.hidden) return;
@@ -189,6 +227,7 @@
       if (c) { c.hidden = !d.count; c.textContent = d.count; }
       const list = $("#liveList");
       if (list) { list.innerHTML = d.list; syncFavs(); }
+      applyScores(d.scores);
     } catch { /* keep what is on screen */ }
   }
   setInterval(pollLive, 45 * 1000);

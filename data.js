@@ -12,7 +12,8 @@ export const DEMO = !API_KEY;
 const UPSTREAM_TIMEOUT_MS = 70 * 1000;
 const BOARD_DAYS = Number(process.env.BOARD_DAYS || 3);     // today + next 2 days
 const BOARD_PAGES = Number(process.env.BOARD_PAGES || 3);   // 20 matches per page per day
-const BOARD_TTL_MS = 8 * 60 * 1000;
+const BOARD_TTL_MS = Number(process.env.BOARD_TTL_MS || 8 * 60 * 1000);
+const KEEP_STARTED_MS = 10 * 3600 * 1000; // matches stay listed for 10 hours after kick-off
 
 export const status = { lastOk: null, lastError: null, lastStatus: null };
 
@@ -103,6 +104,10 @@ async function loadBoard() {
     }
   }
   if (gotAny) {
+    // odds-api only lists matches that have not started. Keep the ones we already knew about for
+    // the rest of the day, so they stay on the page with a live score and then the final result.
+    const keepFrom = Date.now() - KEEP_STARTED_MS;
+    for (const old of board.matches) if (!fresh.has(old.id) && old.ts >= keepFrom) fresh.set(old.id, old);
     board.matches = [...fresh.values()].sort((a, b) => a.ts - b.ts);
     board.updatedAt = Date.now();
     board.error = null;
@@ -125,7 +130,7 @@ export async function getBoard() {
     const p = board.loading || (Date.now() - board.lastAttempt > 20 * 1000 ? refreshBoard() : null);
     if (p) await Promise.race([p, new Promise((r) => setTimeout(r, BOARD_WAIT_MS))]);
   }
-  const cutoff = Date.now() - 4 * 60 * 1000; // hide matches that have kicked off since the last refresh
+  const cutoff = Date.now() - KEEP_STARTED_MS;
   return { matches: board.matches.filter((m) => m.ts >= cutoff), updatedAt: board.updatedAt, error: board.error, loading: !!board.loading };
 }
 
@@ -151,7 +156,7 @@ export async function getLive() {
 export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
-    const d = await callOddsApi("/v1/results?limit=50", 120);
+    const d = await callOddsApi("/v1/results?limit=50", 60);
     return { ...d, results: (d.results || []).map(normMatch) };
   } catch {
     return { results: [], error: true };

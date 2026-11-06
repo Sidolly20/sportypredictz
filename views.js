@@ -2,7 +2,7 @@
 
 import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
-  matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague
+  matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick
 } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
 
@@ -17,6 +17,21 @@ const lgIcon = (lg) => {
 };
 const timeEl = (m, cls = "when") => `<time class="${cls}" datetime="${esc(m.kickoff || "")}" data-t="hm">${clock(m.ts)}</time>`;
 
+// Score + status helpers. state: pre | live | ft | wait. The browser keeps these fresh (see app.js).
+const RES0 = { state: "pre", h: null, a: null, label: "" };
+const resOf = (m) => m.res || RES0;
+const scNum = (m, side) => { const v = resOf(m)[side]; return v === null || v === undefined ? "–" : v; };
+const scEl = (m, side) => `<b class="sc" data-side="${side}">${scNum(m, side)}</b>`;
+const pstEl = (m, k) => { const ps = pickState(m, k); return `<span class="pst${ps ? ` ${ps}` : ""}"${ps ? "" : " hidden"}>${ps ? PICK_TXT[ps] : ""}</span>`; };
+function whenEl(m, k) {
+  const r = resOf(m);
+  const top = r.state === "pre"
+    ? `<time class="w-top" datetime="${esc(m.kickoff || "")}" data-t="hm">${clock(m.ts)}</time>`
+    : `<span class="w-top">${esc(r.label)}</span>`;
+  return `<span class="when">${top}${pstEl(m, k)}</span>`;
+}
+const rowAttrs = (m, k) => `data-sc="${m.id}" data-state="${resOf(m).state}" data-pk="${esc(k || "")}"`;
+
 function oddBtn(m, d, extra = "") {
   const odd = num(d.odd);
   const ok = odd && odd > 1;
@@ -27,12 +42,18 @@ const starBtn = (m) => `<button type="button" class="star" data-fav data-mid="${
 
 export function matchRow(m) {
   const mk = marketsOf(m);
-  const b = bestSide(m);
+  const tp = topPick(m);
+  const pk = tp ? tp.k : null;
+  const ps = pk ? pickState(m, pk) : null;
+  const hl = ps === "won" || ps === "lost" ? ` ${ps}` : "";
   const groups = Object.entries(mk).map(([id, list]) =>
-    `<div class="mk mk-${id}" style="--n:${list.length}">${list.map((d) => oddBtn(m, d, id === "1x2" && b && d.k === b.k && b.pct >= 45 ? " mp" : "")).join("")}</div>`).join("");
-  return `<article class="mrow" data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
-    ${timeEl(m)}
-    <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span></span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span></span></a>
+    `<div class="mk mk-${id}" style="--n:${list.length}">${list.map((d) => oddBtn(m, d, pk && d.k === pk ? ` mp${hl}` : "")).join("")}</div>`).join("");
+  const line = tp
+    ? `<span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>`
+    : `<span class="pkline none"><small>Pick</small><b>No clear pick</b></span>`;
+  return `<article class="mrow" ${rowAttrs(m, pk)} data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
+    ${whenEl(m, pk)}
+    <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span>${scEl(m, "h")}</span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span>${scEl(m, "a")}</span>${line}</a>
     <div class="mks">${groups}</div>
     ${starBtn(m)}
   </article>`;
@@ -86,9 +107,16 @@ function catCards(counts = {}) {
   return `<div class="catgrid">${CATEGORIES.map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span>${counts[c.slug] != null ? `<i>${counts[c.slug]} today</i>` : ""}</a>`).join("")}</div>`;
 }
 
+function cardStat(m, k) {
+  const r = resOf(m);
+  if (r.state === "pre") return timeEl(m, "mono w-top");
+  const ps = pickState(m, k);
+  return `<span class="mono w-top">${esc(r.label)}${r.h !== null ? ` ${r.h}–${r.a}` : ""}</span>${pstEl(m, k)}`;
+}
+
 function pickCard(it) {
-  return `<a class="pickcard" href="${matchPath(it.m)}">
-    <span class="pk-top"><span>${esc(it.m.league.name)}</span>${timeEl(it.m, "mono")}</span>
+  return `<a class="pickcard" href="${matchPath(it.m)}" ${rowAttrs(it.m, it.k)} data-card>
+    <span class="pk-top"><span>${esc(it.m.league.name)}</span><span class="pk-stat">${cardStat(it.m, it.k)}</span></span>
     <span class="pk-teams"><span>${esc(it.m.home.name)}</span><i>vs</i><span>${esc(it.m.away.name)}</span></span>
     <span class="pk-foot"><span class="pk-says"><small>Model says</small><b>${esc(it.label)}</b>${it.odd ? `<small class="mono">Odds ${it.calc ? "~" : ""}${fmtOdd(it.odd)}</small>` : ""}</span><span class="pk-pct">${Math.round(it.pct)}<small>%</small></span></span>
   </a>`;
@@ -97,10 +125,13 @@ function pickCard(it) {
 function pickRow(it) {
   const m = it.m;
   const e = it.edge;
-  return `<article class="prow" data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
-    ${timeEl(m)}
-    <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span></span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span></span><span class="lgline">${esc(m.league.name)}</span></a>
-    <div class="pkcell"><b>${esc(it.label)}</b><span class="bar"><i style="width:${Math.min(100, Math.round(it.pct))}%"></i></span><small>${Math.round(it.pct)}% model chance${e !== null ? ` · edge <em class="${e > 0 ? "pos" : "neg"}">${e > 0 ? "+" : ""}${(e * 100).toFixed(1)}%</em>` : ""}</small></div>
+  const note = it.vs !== undefined && it.vs !== null
+    ? `${Math.round(it.pct)}% model vs ${Math.round(it.vs)}% market`
+    : `${Math.round(it.pct)}% model chance${e !== null ? ` · edge <em class="${e > 0 ? "pos" : "neg"}">${e > 0 ? "+" : ""}${(e * 100).toFixed(1)}%</em>` : ""}`;
+  return `<article class="prow" ${rowAttrs(m, it.k)} data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
+    ${whenEl(m, it.k)}
+    <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span>${scEl(m, "h")}</span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span>${scEl(m, "a")}</span><span class="lgline">${esc(m.league.name)}</span></a>
+    <div class="pkcell"><b>${esc(it.label)}</b><span class="bar"><i style="width:${Math.min(100, Math.round(it.pct))}%"></i></span><small>${note}</small></div>
     ${oddBtn(m, { k: it.k, label: it.k, odd: it.odd, pick: it.label, calc: it.calc })}
     ${starBtn(m)}
   </article>`;
@@ -146,6 +177,7 @@ export function layout(ctx, o) {
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.desc)}">
 <meta name="robots" content="${robots}">${o.refresh ? `<meta http-equiv="refresh" content="${o.refresh}">` : ""}
+${(ctx.verify || []).join("\n")}
 <link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="${SITE_NAME}">
 <meta property="og:title" content="${esc(o.title)}"><meta property="og:description" content="${esc(o.desc)}"><meta property="og:url" content="${esc(url)}">
@@ -202,7 +234,8 @@ export function homePage(ctx, { matches, live, updatedAt }) {
   const todays = matches.filter((m) => dayKey(m.ts) === today);
   const pool = todays.length ? todays : matches;
   const groups = groupByLeague(pool);
-  const picks = rankPicks("banker-picks", matches).slice(0, 8);
+  const bankers = rankPicks("banker-picks", matches);
+  const picks = (bankers.some((x) => x.m.res?.state !== "ft") ? bankers.filter((x) => x.m.res?.state !== "ft") : bankers).slice(0, 8);
   const counts = {};
   for (const c of CATEGORIES) if (c.slug !== "accumulator-tips") counts[c.slug] = rankPicks(c.slug, todays.length ? todays : matches).length;
   const dayLabel = todays.length ? "today" : "coming up";
@@ -210,10 +243,10 @@ export function homePage(ctx, { matches, live, updatedAt }) {
   ${pageHead(`Football predictions ${todays.length ? "today" : "this week"}`, `${esc(longDate(Date.now()))}. Odds and model probabilities for every match, with the picks the numbers like best.`,
     chip(pool.length, "matches") + chip(groups.length, "leagues") + chip(live.length, "live now"))}
   ${picks.length ? `<section class="block"><div class="block-head"><h2>Top picks right now</h2><a href="/predictions/banker-picks">All banker picks →</a></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
-  <section class="block"><div class="block-head"><h2>Browse by bet type</h2><a href="/predictions">All categories →</a></div>${catCards(counts)}</section>
   <section class="block"><div class="block-head"><h2>Matches ${dayLabel}</h2><a href="/football-predictions-today">Full list →</a></div>
     ${pool.length ? toolbar(groups) + groups.slice(0, 5).map((g) => leagueBlock(g, { limit: 4, moreHref: "/football-predictions-today" })).join("") + (groups.length > 5 ? `<a class="btn solid wide" href="/football-predictions-today">See all ${pool.length} matches</a>` : "") : `<div class="empty">No matches loaded yet. Please refresh in a moment.</div>`}
   </section>
+  <section class="block"><div class="block-head"><h2>Browse by bet type</h2><a href="/predictions">All categories →</a></div>${catCards(counts)}</section>
   <section class="block"><div class="block-head"><h2>Leagues</h2><a href="/leagues">All leagues →</a></div><div class="leaguegrid">${ctx.leagues.slice(0, 12).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>
   <section class="prose"><h2>How we make football predictions</h2>${HOME.how.map((p) => `<p>${esc(p)}</p>`).join("")}<p><a href="/how-it-works">Read how to read the numbers →</a></p></section>
   ${faqHtml(HOME.faq)}`;
@@ -271,6 +304,7 @@ export function categoryPage(ctx, { cat, matches }) {
   } else {
     const items = rankPicks(cat.slug, matches).slice(0, 40);
     count = items.length;
+    const weak = items.length && items.every((x) => x.weak);
     const byDay = new Map();
     for (const it of items) {
       const k = dayKey(it.m.ts);
@@ -279,7 +313,7 @@ export function categoryPage(ctx, { cat, matches }) {
     }
     const today = todayKey();
     list = items.length
-      ? `<div class="toolbar single"><label class="search"><span class="sr">Search</span><input type="search" data-search placeholder="Search a team or league" autocomplete="off"></label></div>` +
+      ? (weak ? `<p class="mnote show">Nothing beats the market price by a clear margin right now, so these are the closest: the matches where the model is furthest above the market's own chance. Treat them as a watch list, not a recommendation.</p>` : "") + `<div class="toolbar single"><label class="search"><span class="sr">Search</span><input type="search" data-search placeholder="Search a team or league" autocomplete="off"></label></div>` +
         [...byDay.entries()].map(([k, arr]) => `<section class="lgblock"><h3 class="lghead"><span>${k === today ? "Today" : k === addDays(today, 1) ? "Tomorrow" : esc(shortDate(keyToTs(k)))}</span><span class="n">${arr.length}</span></h3>${arr.map(pickRow).join("")}</section>`).join("")
       : `<div class="empty">No matches meet this rule right now.<br>New picks appear as odds and probabilities refresh.</div>`;
   }
@@ -353,17 +387,21 @@ export function matchPage(ctx, { m, related }) {
   const mk = marketsOf(m);
   const b = bestSide(m);
   const bar = (label, pct) => num(pct) === null ? "" : `<div class="pbar"><span class="lbl">${esc(label)}</span><span class="bar"><i style="width:${Math.min(100, Math.round(pct))}%"></i></span><b>${Math.round(pct)}%</b></div>`;
-  const sc = m.score && m.score.home != null && m.score.home !== undefined ? `<div class="big">${m.score.home} - ${m.score.away}</div>` : `<div class="big">${timeEl(m, "mono")}</div>`;
+  const rs = resOf(m);
+  const hasScore = rs.h !== null && rs.h !== undefined;
+  const sc = hasScore ? `<div class="big">${rs.h} - ${rs.a}</div>` : `<div class="big">${timeEl(m, "mono")}</div>`;
+  const bs = topPick(m) || bestSide(m);
+  const verdictState = bs ? pickState(m, bs.k) : null;
   const groupBlock = (title, list) => `<div class="mkgroup"><h3>${title}</h3><div class="mkgrid" style="--n:${list.length}">${list.map((d) => `<div class="mkcell">${oddBtn(m, d)}${num(d.pct) !== null ? `<small>Model ${Math.round(d.pct)}%</small>` : ""}</div>`).join("")}</div></div>`;
   const title = `${m.home.name} vs ${m.away.name} Prediction, Odds and Tips`;
   const nice = `${longDate(m.ts)}`;
   const body = `${crumbs([["Home", "/"], [m.league.name, m.league.id != null ? leaguePath(m.league) : "/leagues"], [`${m.home.name} vs ${m.away.name}`, path]])}
   <header class="mhead">
     <div class="mleague"><a href="${m.league.id != null ? leaguePath(m.league) : "/leagues"}">${lgIcon(m.league)}<span>${esc(m.league.name)}</span></a><span>${esc(nice)}</span></div>
-    <div class="mteams"><div class="mt">${crest(m.home)}<span>${esc(m.home.name)}</span></div><div class="mmid">${sc}<small>${m.score && m.score.home != null ? esc(m.status || "") : "kick-off"}</small></div><div class="mt">${crest(m.away)}<span>${esc(m.away.name)}</span></div></div>
+    <div class="mteams"><div class="mt">${crest(m.home)}<span>${esc(m.home.name)}</span></div><div class="mmid">${sc}<small>${rs.state === "pre" ? "kick-off" : esc(rs.label)}</small></div><div class="mt">${crest(m.away)}<span>${esc(m.away.name)}</span></div></div>
     <h1>${esc(title)}</h1>
   </header>
-  ${b ? `<section class="verdict"><div><small>Model pick</small><b>${esc(b.label)}</b></div><div class="vpct">${Math.round(b.pct)}<small>%</small></div>${b.odd ? `<div><small>Market odds</small><b class="mono">${fmtOdd(b.odd)}</b></div>` : ""}</section>` : ""}
+  ${b ? `<section class="verdict"><div><small>Model pick</small><b>${esc(b.label)}</b></div><div class="vpct">${Math.round(b.pct)}<small>%</small></div>${verdictState ? `<div><small>Result</small><span class="pst ${verdictState}">${PICK_TXT[verdictState]}</span></div>` : ""}${b.odd ? `<div><small>Market odds</small><b class="mono">${fmtOdd(b.odd)}</b></div>` : ""}</section>` : ""}
   ${p ? `<section class="block"><h2>Win probability</h2>${bar(m.home.name, p.home_win_pct)}${bar("Draw", p.draw_pct)}${bar(m.away.name, p.away_win_pct)}</section>` : ""}
   <section class="block"><h2>Odds and model chances</h2><p class="mnote show">Tap a price to add it to your pick slip.</p>
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}

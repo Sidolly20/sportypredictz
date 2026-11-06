@@ -125,6 +125,24 @@ export function bestSide(m) {
   return c.length ? c.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
 }
 
+// One pick for every match, if the model is confident enough. Order: match result (45%+),
+// then goals / both teams score (55%+), then double chance (70%+). Otherwise there is no pick.
+export const PICK_MIN = { side: 45, goals: 55, btts: 55, dc: 70 };
+export function topPick(m) {
+  const p = m.prediction;
+  if (!p || !m.odds) return null;
+  const mk = marketsOf(m);
+  const ok = (d, min) => d && num(d.pct) !== null && num(d.odd) > 1 && d.pct >= min;
+  const mk1 = mk["1x2"].filter((d) => ok(d, PICK_MIN.side)).sort((a, b) => b.pct - a.pct)[0];
+  const others = [
+    ...mk.goals.filter((d) => ["O2.5", "U2.5"].includes(d.k) && ok(d, PICK_MIN.goals)),
+    ...mk.btts.filter((d) => d.k === "GG" && ok(d, PICK_MIN.btts) || d.k === "NG" && ok(d, PICK_MIN.btts + 5))
+  ].sort((a, b) => b.pct - a.pct)[0];
+  const dcs = mk.dc.filter((d) => ok(d, PICK_MIN.dc)).sort((a, b) => b.pct - a.pct)[0];
+  const d = mk1 || others || dcs;
+  return d ? { k: d.k, label: d.pick, pct: d.pct, odd: num(d.odd), calc: !!d.calc } : null;
+}
+
 const inv = (...odds) => {
   const xs = odds.map(num);
   return xs.every((x) => x && x > 1) ? 1 / xs.reduce((s, x) => s + 1 / x, 0) : null;
@@ -167,10 +185,100 @@ export const MARKET_TABS = [
   { id: "dc", name: "Double chance" }
 ];
 
+// The market's own chance for a pick after taking the bookmaker margin out (in percent).
+export function fairOf(m, k) {
+  const o = m.odds || {};
+  const pair = (a, b) => { const x = num(a), y = num(b); return x > 1 && y > 1 ? (1 / x) / (1 / x + 1 / y) * 100 : null; };
+  if (k === "1" || k === "X" || k === "2") {
+    const h = num(o.home_win), d = num(o.draw), a = num(o.away_win);
+    if (!(h > 1 && d > 1 && a > 1)) return null;
+    const t = 1 / h + 1 / d + 1 / a;
+    return (1 / ({ "1": h, X: d, "2": a }[k])) / t * 100;
+  }
+  if (k === "O2.5") return pair(o.over_25_goals, o.under_25_goals);
+  if (k === "U2.5") return pair(o.under_25_goals, o.over_25_goals);
+  if (k === "GG") return pair(o.btts_yes, o.btts_no);
+  if (k === "NG") return pair(o.btts_no, o.btts_yes);
+  return null;
+}
+
+// ---------- live scores, full time and "did the pick win?" ----------
+const FINISHED = /finish|ended|^ft$|full.?time|after/i;
+const HALFTIME = /half.?time|^ht$|break/i;
+const scoreOfRaw = (x) => (x && x.score ? [num(x.score.home), num(x.score.away)] : [null, null]);
+const liveLabel = (x) => (HALFTIME.test(`${x.status || ""} ${x.period || ""}`) ? "HT" : x.minute !== null && x.minute !== undefined && x.minute !== "" ? `${x.minute}'` : "LIVE");
+
+// state: pre (not started) | live | ft | wait (kick-off time passed, no score yet)
+export function scoreInfo(m, lv, rs, now = Date.now()) {
+  if (lv && !FINISHED.test(String(lv.status || ""))) {
+    const [h, a] = scoreOfRaw(lv);
+    return { state: "live", h, a, label: liveLabel(lv) };
+  }
+  const done = rs || (lv && FINISHED.test(String(lv.status || "")) ? lv : null);
+  if (done) {
+    const [h, a] = scoreOfRaw(done);
+    if (h !== null && a !== null) return { state: "ft", h, a, label: "FT" };
+  }
+  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < 3.5 * 3600e3 ? "Started" : "Pending" };
+  return { state: "pre", h: null, a: null, label: "" };
+}
+
+export function annotate(matches, liveList, resultList, now = Date.now()) {
+  const L = new Map((liveList || []).map((x) => [Number(x.id), x]));
+  const R = new Map((resultList || []).map((x) => [Number(x.id), x]));
+  return matches.map((m) => ({ ...m, res: scoreInfo(m, L.get(m.id), R.get(m.id), now) }));
+}
+
+export const scoreMap = (matches) => Object.fromEntries(matches.filter((m) => m.res && m.res.state !== "pre").map((m) => [m.id, [m.res.state, m.res.h, m.res.a, m.res.label]]));
+
+// Did a pick win? final=true at full time. While live: on/off = winning/losing right now, wait = undecided.
+export function judge(k, h, a, final) {
+  if (h === null || h === undefined || a === null || a === undefined) return null;
+  const t = h + a, draw = h === a;
+  const side = { "1": h > a, X: draw, "2": a > h, "1X": h >= a, X2: a >= h, "12": !draw }[k];
+  if (side !== undefined) return final ? (side ? "won" : "lost") : (side ? "on" : "off");
+  const line = { "O1.5": 1.5, "O2.5": 2.5, "O3.5": 3.5, "U2.5": 2.5 }[k];
+  if (line !== undefined) {
+    if (k[0] === "O") return t > line ? "won" : final ? "lost" : "wait";
+    return t > line ? "lost" : final ? "won" : "wait";
+  }
+  if (k === "GG") return h > 0 && a > 0 ? "won" : final ? "lost" : "wait";
+  if (k === "NG") return h > 0 && a > 0 ? "lost" : final ? "won" : "wait";
+  return null;
+}
+export const PICK_TXT = { won: "Won", lost: "Lost", on: "Winning", off: "Losing", wait: "In play" };
+export function pickState(m, k) {
+  const r = m.res;
+  if (!k || !r || (r.state !== "live" && r.state !== "ft")) return null;
+  return judge(k, r.h, r.a, r.state === "ft");
+}
+
 // ---------- prediction categories ----------
 const item = (m, k, label, pct, odd, calc = false) => ({
   m, k, label, pct: num(pct), odd: num(odd), calc, edge: calc ? null : edgeOf(pct, odd)
 });
+
+// Best "model above market" pick in a match. min = smallest gap (model chance / fair market chance - 1) to count.
+function valuePick(m, min) {
+  const o = m.odds, p = m.prediction;
+  if (!o || !p) return null;
+  const cands = [
+    ["1", `${m.home.name} to win`, p.home_win_pct, o.home_win],
+    ["X", "Draw", p.draw_pct, o.draw],
+    ["2", `${m.away.name} to win`, p.away_win_pct, o.away_win],
+    ["O2.5", "Over 2.5 goals", p.over_25_pct, o.over_25_goals],
+    ["U2.5", "Under 2.5 goals", num(p.over_25_pct) === null ? null : 100 - p.over_25_pct, o.under_25_goals],
+    ["GG", "Both teams to score", p.btts_yes_pct, o.btts_yes],
+    ["NG", "Both teams to score: No", num(p.btts_yes_pct) === null ? null : 100 - p.btts_yes_pct, o.btts_no]
+  ].map(([k, label, pct, odd]) => {
+    const it = item(m, k, label, pct, odd);
+    const fair = fairOf(m, k);
+    it.edge = fair && it.pct !== null ? it.pct / fair - 1 : null;
+    it.vs = fair;
+    return it;
+  }).filter((x) => x.pct !== null && x.odd && x.odd <= 6 && x.pct >= 30 && x.edge !== null && x.edge >= min);
+  return cands.length ? cands.reduce((a, b) => (b.edge > a.edge ? b : a)) : null;
+}
 
 export const PICKERS = {
   "banker-picks": (m) => {
@@ -212,20 +320,7 @@ export const PICKERS = {
     const mk = marketsOf(m).dc.find((x) => x.k === (useHome ? "1X" : "X2"));
     return item(m, mk.k, mk.pick, pct, mk.odd, true);
   },
-  "value-bets": (m) => {
-    const o = m.odds, p = m.prediction;
-    if (!o || !p) return null;
-    const cands = [
-      ["1", `${m.home.name} to win`, p.home_win_pct, o.home_win],
-      ["X", "Draw", p.draw_pct, o.draw],
-      ["2", `${m.away.name} to win`, p.away_win_pct, o.away_win],
-      ["O2.5", "Over 2.5 goals", p.over_25_pct, o.over_25_goals],
-      ["U2.5", "Under 2.5 goals", num(p.over_25_pct) === null ? null : 100 - p.over_25_pct, o.under_25_goals],
-      ["GG", "Both teams to score", p.btts_yes_pct, o.btts_yes]
-    ].map(([k, label, pct, odd]) => item(m, k, label, pct, odd))
-      .filter((x) => x.pct !== null && x.odd && x.odd <= 6 && x.pct >= 30 && x.edge !== null && x.edge >= 0.06);
-    return cands.length ? cands.reduce((a, b) => (b.edge > a.edge ? b : a)) : null;
-  }
+  "value-bets": (m) => valuePick(m, 0.03)
 };
 
 export function rankPicks(slug, matches) {
@@ -236,7 +331,14 @@ export function rankPicks(slug, matches) {
     const it = fn(m);
     if (it) out.push(it);
   }
-  return out.sort(slug === "value-bets" ? (a, b) => b.edge - a.edge : (a, b) => b.pct - a.pct || a.m.ts - b.m.ts);
+  out.sort(slug === "value-bets" ? (a, b) => b.edge - a.edge : (a, b) => b.pct - a.pct || a.m.ts - b.m.ts);
+  if (slug === "value-bets" && !out.length) {
+    // Nothing clearly beats the market. Show the closest ones, and say so on the page.
+    const near = [];
+    for (const m of matches) if (!m.res || m.res.state === "pre") { const it = valuePick(m, -0.05); if (it) { it.weak = true; near.push(it); } }
+    return near.sort((a, b) => b.edge - a.edge).slice(0, 10);
+  }
+  return out;
 }
 
 // Accumulator builder: stack the most likely picks until the total odds reach the target.

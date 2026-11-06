@@ -10,7 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError } from "./data.js";
-import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify } from "./logic.js";
+import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
 
@@ -18,6 +18,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SITE_URL = (process.env.SITE_URL || "").replace(/\/+$/, "");
+
+// Search-engine ownership checks. Set these in Render > Environment (all optional):
+//   GOOGLE_SITE_VERIFICATION = the code from Google's "HTML tag" method (the long text after content=), or the whole <meta> tag
+//   GOOGLE_VERIFY_FILE       = the file name from Google's "HTML file" method, e.g. google1a2b3c4d5e6f.html
+//   BING_SITE_VERIFICATION   = the code from Bing Webmaster Tools' meta tag method
+const metaCode = (v) => { const t = String(v || "").trim(); const m = t.match(/content\s*=\s*["']([^"']+)["']/i); return (m ? m[1] : t).replace(/["'<>]/g, ""); };
+const VERIFY = [];
+if (process.env.GOOGLE_SITE_VERIFICATION) VERIFY.push(`<meta name="google-site-verification" content="${metaCode(process.env.GOOGLE_SITE_VERIFICATION)}">`);
+if (process.env.BING_SITE_VERIFICATION) VERIFY.push(`<meta name="msvalidate.01" content="${metaCode(process.env.BING_SITE_VERIFICATION)}">`);
+const VERIFY_FILE = (process.env.GOOGLE_VERIFY_FILE || "").trim().replace(/^\/+/, "");
 
 app.set("trust proxy", true);
 app.disable("x-powered-by");
@@ -40,10 +50,10 @@ const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise((r) => set
 function makeCtx(req, board, live) {
   for (const m of board.matches) if (m.league.id != null) seenLeagues.set(m.league.id, m.league);
   const leagues = [...seenLeagues.values()].sort(byLeague);
-  const t = V.tickerHtml(live.matches || [], board.matches);
+  const t = V.tickerHtml(live.matches || [], board.matches.filter((m) => !m.res || m.res.state === "pre"));
   return {
     origin: SITE_URL || `${req.protocol}://${req.get("host")}`,
-    demo: DEMO, v: ASSET_V, leagues, ticker: t, liveCount: (live.matches || []).length
+    demo: DEMO, v: ASSET_V, leagues, ticker: t, liveCount: (live.matches || []).length, verify: VERIFY
   };
 }
 
@@ -51,8 +61,10 @@ function makeCtx(req, board, live) {
 function route(build, { maxAge = 60, needsBoard = false } = {}) {
   return async (req, res) => {
     try {
-      const [board, live] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] })]);
+      const [board0, live, done] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
+      const board = { ...board0, matches: annotate(board0.matches, live.matches, done.results) };
       const ctx = makeCtx(req, board, live);
+      ctx.scoresFor = (m) => annotate([m], live.matches, done.results)[0];
       if (needsBoard && !board.matches.length) {
         // No matches yet (odds-api is probably waking up). Show a friendly page that reloads itself.
         return res.status(503).set({ "Cache-Control": "no-store", "Retry-After": "20" }).type("html").send(V.layout(ctx, V.warmingPage()));
@@ -63,7 +75,7 @@ function route(build, { maxAge = 60, needsBoard = false } = {}) {
     } catch (err) {
       console.error("Page error:", req.path, err.message);
       try {
-        const ctx = { origin: SITE_URL || `${req.protocol}://${req.get("host")}`, demo: DEMO, v: ASSET_V, leagues: [], ticker: { label: "NEXT UP", items: "" }, liveCount: 0 };
+        const ctx = { origin: SITE_URL || `${req.protocol}://${req.get("host")}`, demo: DEMO, v: ASSET_V, leagues: [], ticker: { label: "NEXT UP", items: "" }, liveCount: 0, verify: VERIFY };
         res.status(503).set("Cache-Control", "no-store").type("html").send(V.layout(ctx, V.errorPage()));
       } catch { res.status(503).send("Please try again in a minute."); }
     }
@@ -124,7 +136,7 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
     return route(async ({ ctx, board }) => {
       if (!m) return null;
       const related = board.matches.filter((x) => x.league.id === m.league.id && x.id !== m.id).slice(0, 5);
-      return V.matchPage(ctx, { m, related });
+      return V.matchPage(ctx, { m: ctx.scoresFor(m), related });
     }, { maxAge: 45 })(req, res);
   } catch (err) {
     console.error("Match error:", err.message);
@@ -139,9 +151,15 @@ for (const slug of Object.keys(PAGES)) app.get(`/${slug}`, route(({ ctx }) => V.
 
 // ---------- small JSON endpoints for the browser ----------
 app.get("/api/live", async (req, res) => {
-  const [board, live] = await Promise.all([getBoard(), getLive()]);
+  const [board0, live, done] = await Promise.all([getBoard(), getLive(), withTimeout(getResults(), 4000, { results: [] })]);
   const list = live.matches || [];
-  res.set("Cache-Control", "no-store").json({ count: list.length, ticker: V.tickerHtml(list, board.matches), list: V.liveList(list) });
+  const matches = annotate(board0.matches, list, done.results);
+  res.set("Cache-Control", "no-store").json({
+    count: list.length,
+    ticker: V.tickerHtml(list, matches.filter((m) => m.res.state === "pre")),
+    list: V.liveList(list),
+    scores: scoreMap(matches)
+  });
 });
 
 app.get("/api/status", (req, res) => {
@@ -155,6 +173,10 @@ app.get("/api/debug/standings/:id", async (req, res) => {
   try { res.json(await standingsShape(id)); }
   catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
 });
+
+if (/^google[a-z0-9]+\.html$/i.test(VERIFY_FILE)) {
+  app.get(`/${VERIFY_FILE}`, (req, res) => res.type("text/html").send(`google-site-verification: ${VERIFY_FILE}`));
+}
 
 app.get("/healthz", (req, res) => res.send("ok"));
 
