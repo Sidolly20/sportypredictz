@@ -25,3 +25,10 @@ Prediction pages, FAQs, About, Terms and Privacy text are all in content.js.
 
 ## Useful addresses
 /api/status shows connection health. /sitemap.xml and /robots.txt are made automatically.
+
+## Permanent record (Supabase, optional)
+1. Supabase → SQL Editor → run `supabase-setup.sql`.
+2. Supabase → Project Settings → API: copy the Project URL and the `service_role` key.
+3. Render → SportyPredictz → Environment: add `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Save.
+4. Open `/api/status` — `pickLog` should say it is on.
+Picks are saved before kick-off and marked won/lost at full time.

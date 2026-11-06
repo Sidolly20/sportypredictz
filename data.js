@@ -4,6 +4,7 @@
 
 import { demoWindow, demoLive, demoResults, demoStandings } from "./demo.js";
 import { normMatch, num, todayKey, addDays, topPick, judge } from "./logic.js";
+import { fetchRecord, summarise } from "./pickLog.js";
 
 export const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
 export const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
@@ -141,12 +142,33 @@ export function startBoardLoop() {
   setInterval(refreshBoard, BOARD_TTL_MS).unref?.();
 }
 
+// ---------- matches that started before we saw them ----------
+// odds-api stops listing a match once it kicks off. If the site restarted mid-day, those matches would be
+// missing from the lists. So when we see one in /v1/live or /v1/results we fetch its odds + prediction once.
+const tried = new Set();
+async function hydrateStarted(list) {
+  if (DEMO || !list.length) return;
+  const known = new Set(board.matches.map((m) => m.id));
+  const todo = list.filter((x) => x && x.id != null && !known.has(Number(x.id)) && !tried.has(Number(x.id))).slice(0, 25);
+  for (const x of todo) {
+    tried.add(Number(x.id));
+    try {
+      const d = await callOddsApi(`/v1/matches/${x.id}?include=odds,prediction`, 600);
+      if (!d.match || !(d.odds || d.prediction)) continue;
+      board.matches.push(normMatch({ ...x, ...d.match, odds: d.odds ?? null, prediction: d.prediction ?? null }));
+    } catch { /* leave it out */ }
+  }
+  if (todo.length) board.matches.sort((a, b) => a.ts - b.ts);
+}
+
 // ---------- live scores ----------
 export async function getLive() {
   if (DEMO) return demoLive();
   try {
-    const d = await callOddsApi("/v1/live", 30);
-    return { ...d, matches: (d.matches || []).map(normMatch) };
+    const d = await callOddsApi("/v1/live", 12);
+    const matches = (d.matches || []).map(normMatch);
+    hydrateStarted(matches);
+    return { ...d, matches };
   } catch {
     return { matches: [], error: true };
   }
@@ -157,7 +179,9 @@ export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
     const d = await callOddsApi("/v1/results?limit=50", 60);
-    return { ...d, results: (d.results || []).map(normMatch) };
+    const results = (d.results || []).map(normMatch);
+    hydrateStarted(results.filter((x) => x.ts >= Date.now() - 24 * 3600e3));
+    return { ...d, results };
   } catch {
     return { results: [], error: true };
   }
@@ -298,8 +322,9 @@ export function rememberFinished(matches) {
   const cut = Date.now() - 72 * 3600e3;
   for (const [id, r] of record) if (r.m.ts < cut) record.delete(id);
 }
-export function getRecord() {
+export async function getRecord() {
+  const db = await Promise.race([fetchRecord(), new Promise((r) => setTimeout(() => r(null), 2500))]);
+  if (db && db.total) return db;
   const list = [...record.values()].sort((a, b) => b.m.ts - a.m.ts).map((r) => ({ ...r, state: judge(r.pick.k, r.h, r.a, true) }));
-  const won = list.filter((r) => r.state === "won").length;
-  return { list, won, total: list.length, rate: list.length ? Math.round((won / list.length) * 100) : null };
+  return summarise(list);
 }

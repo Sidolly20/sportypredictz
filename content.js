@@ -9,6 +9,7 @@ export const SITE_NAME = "SportyPredictz";
 export const CATEGORIES = [
   {
     slug: "banker-picks",
+    group: "Match result", featured: true,
     name: "Banker picks",
     short: "The matches where our model is most sure of the result.",
     title: "Banker Football Predictions Today: Most Likely Results",
@@ -26,6 +27,7 @@ export const CATEGORIES = [
   },
   {
     slug: "home-wins",
+    group: "Match result",
     name: "Home wins",
     short: "Teams the model backs to win in front of their own fans.",
     title: "Home Win Predictions Today: Best Home Team Tips",
@@ -43,6 +45,7 @@ export const CATEGORIES = [
   },
   {
     slug: "away-wins",
+    group: "Match result",
     name: "Away wins",
     short: "Visitors the model thinks can win on the road.",
     title: "Away Win Predictions Today: Best Away Team Tips",
@@ -59,6 +62,7 @@ export const CATEGORIES = [
   },
   {
     slug: "draws",
+    group: "Match result",
     name: "Draw predictions",
     short: "Evenly matched games where a draw is the live option.",
     title: "Draw Predictions Today: Matches Likely to End Level",
@@ -75,6 +79,7 @@ export const CATEGORIES = [
   },
   {
     slug: "over-2-5-goals",
+    group: "Goals", featured: true,
     name: "Over 2.5 goals",
     short: "Matches likely to see three goals or more.",
     title: "Over 2.5 Goals Predictions Today: High-Scoring Matches",
@@ -92,6 +97,7 @@ export const CATEGORIES = [
   },
   {
     slug: "under-2-5-goals",
+    group: "Goals",
     name: "Under 2.5 goals",
     short: "Tighter games where two goals or fewer is the likely outcome.",
     title: "Under 2.5 Goals Predictions Today: Low-Scoring Matches",
@@ -108,6 +114,7 @@ export const CATEGORIES = [
   },
   {
     slug: "both-teams-to-score",
+    group: "Both teams to score", featured: true,
     name: "Both teams to score",
     short: "Matches where each side is expected to find the net.",
     title: "Both Teams to Score (BTTS) Predictions Today",
@@ -125,6 +132,7 @@ export const CATEGORIES = [
   },
   {
     slug: "double-chance",
+    group: "Double chance",
     name: "Double chance",
     short: "Two of three results covered. Safer picks, shorter odds.",
     title: "Double Chance Predictions Today: Safer Football Tips",
@@ -141,6 +149,7 @@ export const CATEGORIES = [
   },
   {
     slug: "value-bets",
+    group: "Smart picks", featured: true,
     name: "Value bets",
     short: "Where the model is more optimistic than the market.",
     title: "Football Value Bets Today: Model vs Market Odds",
@@ -158,19 +167,191 @@ export const CATEGORIES = [
   },
   {
     slug: "accumulator-tips",
+    group: "Accumulators", kind: "acca-hub",
     name: "Accumulator tips",
     short: "Ready-made accas built from the most likely picks.",
-    title: "Accumulator Tips Today: 2 Odds and 5 Odds Football Acca",
-    desc: "Football accumulator tips today: a 2-odds and a 5-odds acca built from the model's most likely results. Add the whole acca to your slip in one tap.",
+    title: "Accumulator Tips Today: 2, 3, 5 and 10 Odds Football Accas",
+    desc: "Football accumulator tips today: 2, 3, 5 and 10 odds accas built from the model's most likely results. Add a whole acca to your slip in one tap.",
     h1: "Accumulator tips",
     intro: [
-      "We build two accas each day by stacking the most likely results until the total odds reach about 2.00 and 5.00. We keep to two picks per league, so a single bad day in one competition cannot sink everything.",
+      "We build four accas each day by stacking the most likely results until the total odds reach about 2, 3, 5 and 10. We keep to two picks per league, so a single bad day in one competition cannot sink everything.",
       "Every extra leg lowers your chance of winning. A 5-odds acca of favourites can look comfortable on paper and still fall apart on one late goal. Stake small."
     ],
     faq: [
       ["How is the acca built?", "We take the picks with the highest model probability, skip anything priced below 1.12 or above 3.00, and add legs until the total odds reach the target."],
       ["Can the acca change during the day?", "Yes. If odds move or a match kicks off, the acca is rebuilt on the next refresh."],
       ["What is the pick slip?", "A simple tracker on this site. It adds up your odds. It does not place bets."]
+    ]
+  },
+
+  {
+    slug: "over-1-5-goals", group: "Goals", featured: true,
+    name: "Over 1.5 goals",
+    short: "Matches likely to see at least two goals.",
+    title: "Over 1.5 Goals Predictions Today: Safer Goals Tips",
+    desc: "Over 1.5 goals predictions for today and the next two days: matches where the model gives two or more goals a 78% chance or better, with odds.",
+    h1: "Over 1.5 goals predictions",
+    intro: [
+      "Over 1.5 is the cautious goals bet. It wins the moment a second goal goes in, whoever scores it, so the prices are short. This page lists every upcoming match where the model puts the chance of two or more goals at 78% or higher.",
+      "Short prices cut both ways. At odds of 1.25 you need to win four times in five just to break even, so one 1-0 result can wipe out the profit from several wins. Use this list as a starting point and check the match page before you decide."
+    ],
+    faq: [
+      ["What does over 1.5 goals mean?", "The match needs at least two goals in normal time. A 1-1, 2-0 or 3-2 all win. A 0-0 or a 1-0 loses."],
+      ["Is over 1.5 safer than over 2.5?", "It wins more often, which is why it pays less. The extra goal you need for over 2.5 is what separates the two."],
+      ["Which matches get listed?", "Any match where the model gives over 1.5 a probability of 78% or more, ranked from the highest down."]
+    ]
+  },
+  {
+    slug: "over-3-5-goals", group: "Goals",
+    name: "Over 3.5 goals",
+    short: "Open games where four or more goals are on the cards.",
+    title: "Over 3.5 Goals Predictions Today: High-Scoring Football Tips",
+    desc: "Over 3.5 goals predictions: matches where the model sees a real chance of four or more goals, with market odds and probabilities.",
+    h1: "Over 3.5 goals predictions",
+    intro: [
+      "Four goals is a lot, and most matches fall short. That is why over 3.5 pays well and loses often. We only list matches where the model rates four or more goals at 38% or better, which is high for this market.",
+      "Treat these as high-risk, high-reward picks. A 40% chance at odds of 2.60 is a fair deal on paper, but you will still lose six times in ten. Keep stakes small."
+    ],
+    faq: [
+      ["Why is the percentage so much lower here?", "Because four goals is rare. A 40% rating in this market is a strong signal, much like 75% would be for over 1.5."],
+      ["Does extra time count?", "No. Goals markets cover the 90 minutes plus stoppage time only."],
+      ["Where do the odds come from?", "From the same market consensus price we show everywhere on the site. They can move before kick-off."]
+    ]
+  },
+  {
+    slug: "both-teams-not-to-score", group: "Both teams to score",
+    name: "Both teams not to score",
+    short: "Games where at least one side may stay quiet.",
+    title: "Both Teams Not To Score Predictions Today: BTTS No Tips",
+    desc: "BTTS No predictions: matches where the model thinks at least one team fails to score, with odds and a probability for each.",
+    h1: "Both teams not to score predictions",
+    intro: [
+      "Both teams not to score, often written BTTS No, wins when one side or both go home without a goal. It suits matches with a strong favourite, a leaky underdog and little else, or two sides who rarely get chances.",
+      "We list matches where the model gives the no outcome 58% or more. A 1-0 and a 0-0 both win, and so does a 4-0. One late consolation goal ends it."
+    ],
+    faq: [
+      ["Does a 0-0 win BTTS No?", "Yes. Any score where at least one team stays on zero wins."],
+      ["When does BTTS No make sense?", "When one team is very strong defensively, or the other is in poor attacking form. The match page shows the model's view."],
+      ["How is it different from under 2.5 goals?", "Under 2.5 wins any 1-1 draw, but BTTS No loses it. BTTS No wins a 3-0, which loses under 2.5. The two bets react to different scores."]
+    ]
+  },
+  {
+    slug: "double-chance-1x", group: "Double chance",
+    name: "Home or draw (1X)",
+    short: "The home side wins or draws. Only an away win beats you.",
+    title: "1X Double Chance Predictions Today: Home Win or Draw Tips",
+    desc: "Home win or draw (1X) predictions: matches where the model gives the home side at least a 75% chance of not losing, with calculated odds.",
+    h1: "Home or draw (1X) predictions",
+    intro: [
+      "Double chance 1X covers two of the three results: a home win or a draw. You lose only if the away team wins. That makes it a popular pick when a home favourite looks strong but the draw is a real worry.",
+      "We list matches where the combined chance of a home win or a draw is 75% or higher. The odds shown are worked out from the match result prices and marked with a tilde, so treat them as a guide and check the real price with your bookmaker."
+    ],
+    faq: [
+      ["What does 1X mean?", "1 is a home win and X is a draw. The bet wins if either happens."],
+      ["Why are the odds marked with ~?", "Because we calculate them from the match result odds rather than quoting a bookmaker. Real prices can differ a little."],
+      ["Is 1X a safe bet?", "It wins often, but the prices are short. One away win undoes several small profits."]
+    ]
+  },
+  {
+    slug: "double-chance-x2", group: "Double chance",
+    name: "Draw or away (X2)",
+    short: "The visitors win or draw. Only a home win beats you.",
+    title: "X2 Double Chance Predictions Today: Draw or Away Win Tips",
+    desc: "Draw or away win (X2) predictions: matches where the model gives the visitors at least a 70% chance of not losing, with odds.",
+    h1: "Draw or away (X2) predictions",
+    intro: [
+      "Double chance X2 wins when the away team wins or the match is drawn. It gives you cover when you like the visitors but do not trust them to win outright, or when the home side is strong but not unbeatable.",
+      "Away sides win less often than home sides, so the bar here is a little lower: we list matches where a draw or an away win comes to 70% or more. Odds are calculated from the match result prices and shown with a tilde."
+    ],
+    faq: [
+      ["What does X2 mean?", "X is a draw and 2 is an away win. Either result wins the bet."],
+      ["Why is the threshold 70% and not higher?", "Away teams carry less home advantage, so strong X2 spots are rarer. A lower bar keeps the list useful."],
+      ["Can I add X2 to my slip?", "Yes. Open the Double chance tab on any match and tap the X2 price."]
+    ]
+  },
+  {
+    slug: "double-chance-12", group: "Double chance",
+    name: "Home or away (12)",
+    short: "Anyone wins. A draw is the only way to lose.",
+    title: "12 Double Chance Predictions Today: No Draw Football Tips",
+    desc: "Home or away (12) predictions: matches where the model rates a draw as unlikely and a winner at 80% or better, with calculated odds.",
+    h1: "Home or away (12) predictions",
+    intro: [
+      "Double chance 12 wins if either team wins and loses only on a draw. It is the pick for matches that look open and attacking, where you expect a winner but cannot say who.",
+      "We list matches where the model puts a win for either side at 80% or higher, which means the draw is clearly the outsider. The odds are calculated from the match result prices."
+    ],
+    faq: [
+      ["What does 12 mean?", "1 is a home win and 2 is an away win. A draw is the only result that loses."],
+      ["When is 12 a good idea?", "In matches between two attacking sides, or where both teams need the win."],
+      ["Are the odds exact?", "No. They are worked out from the 1X2 prices and marked with a tilde."]
+    ]
+  },
+  {
+    slug: "acca-2-odds", group: "Accumulators", kind: "acca", acca: { target: 2, legs: 3 }, featured: true,
+    name: "2 odds accumulator",
+    short: "A short acca built to land around 2.00.",
+    title: "2 Odds Accumulator Tips Today: Safe 2.00 Football Acca",
+    desc: "Today's 2 odds accumulator: two or three of the model's most likely results stacked to about 2.00 total odds. Add it to your slip in one tap.",
+    h1: "2 odds accumulator",
+    intro: [
+      "A 2 odds acca is the gentlest way into accumulators. Two or three strong favourites, stacked until the total reaches about 2.00, so you only need a couple of results to land.",
+      "Short does not mean safe. Even three 75% picks win together only about four times in ten. Keep the stake small and enjoy the lower variance."
+    ],
+    faq: [
+      ["How is this acca built?", "We stack the picks with the highest model probability, skip anything priced below 1.12 or above 3.00, and stop when the total odds reach about 2.00. No more than two picks come from one league."],
+      ["Does the acca change during the day?", "Yes. If a match kicks off or the odds move, it is rebuilt on the next refresh. Tap Add all to pick slip to lock in what you see."],
+      ["Is an acca a good idea?", "Every extra leg lowers your chance of winning. Treat it as a small-stake bet and never chase losses with it."]
+    ]
+  },
+  {
+    slug: "acca-3-odds", group: "Accumulators", kind: "acca", acca: { target: 3, legs: 4 },
+    name: "3 odds accumulator",
+    short: "A balanced acca built to land around 3.00.",
+    title: "3 Odds Accumulator Tips Today: Football Acca at 3.00",
+    desc: "Today's 3 odds accumulator: the model's strongest picks stacked to about 3.00 total odds, with the whole acca ready to add to your slip.",
+    h1: "3 odds accumulator",
+    intro: [
+      "Three to four likely results stacked to a total near 3.00. It pays three times your stake, which is a good middle ground between a cautious double and a long shot.",
+      "We stop adding legs as soon as the target is reached, so the acca is never longer than it needs to be."
+    ],
+    faq: [
+      ["How is this acca built?", "We stack the picks with the highest model probability, skip anything priced below 1.12 or above 3.00, and stop when the total odds reach about 3.00. No more than two picks come from one league."],
+      ["Does the acca change during the day?", "Yes. If a match kicks off or the odds move, it is rebuilt on the next refresh. Tap Add all to pick slip to lock in what you see."],
+      ["Is an acca a good idea?", "Every extra leg lowers your chance of winning. Treat it as a small-stake bet and never chase losses with it."]
+    ]
+  },
+  {
+    slug: "acca-5-odds", group: "Accumulators", kind: "acca", acca: { target: 5, legs: 6 }, featured: true,
+    name: "5 odds accumulator",
+    short: "A bigger acca built to land around 5.00.",
+    title: "5 Odds Accumulator Tips Today: Football Acca at 5.00",
+    desc: "Today's 5 odds accumulator built from the model's most likely results, about 5.00 total odds, with no more than two picks from one league.",
+    h1: "5 odds accumulator",
+    intro: [
+      "Five times your stake needs four to six legs, and each one is another chance for a late goal to ruin the day. We spread the picks across leagues to avoid one bad evening in a single competition sinking everything.",
+      "This is a small-stake bet. If it comes in, great. If not, tomorrow's acca is a fresh start, not a reason to raise the stake."
+    ],
+    faq: [
+      ["How is this acca built?", "We stack the picks with the highest model probability, skip anything priced below 1.12 or above 3.00, and stop when the total odds reach about 5.00. No more than two picks come from one league."],
+      ["Does the acca change during the day?", "Yes. If a match kicks off or the odds move, it is rebuilt on the next refresh. Tap Add all to pick slip to lock in what you see."],
+      ["Is an acca a good idea?", "Every extra leg lowers your chance of winning. Treat it as a small-stake bet and never chase losses with it."]
+    ]
+  },
+  {
+    slug: "acca-10-odds", group: "Accumulators", kind: "acca", acca: { target: 10, legs: 9 },
+    name: "10 odds accumulator",
+    short: "A long acca built to land around 10.00.",
+    title: "10 Odds Accumulator Tips Today: Football Acca at 10.00",
+    desc: "Today's 10 odds accumulator: six to nine of the model's most likely picks stacked to about 10.00 total odds. Small stakes only.",
+    h1: "10 odds accumulator",
+    intro: [
+      "Ten times your stake sounds great, and it usually takes six to nine legs to get there. Even when every pick is a favourite, the chance of all of them winning is small.",
+      "We build it from the strongest picks on the board and keep to two per league. Think of it as a lottery ticket with better odds, and stake accordingly."
+    ],
+    faq: [
+      ["How is this acca built?", "We stack the picks with the highest model probability, skip anything priced below 1.12 or above 3.00, and stop when the total odds reach about 10.00. No more than two picks come from one league."],
+      ["Does the acca change during the day?", "Yes. If a match kicks off or the odds move, it is rebuilt on the next refresh. Tap Add all to pick slip to lock in what you see."],
+      ["Is an acca a good idea?", "Every extra leg lowers your chance of winning. Treat it as a small-stake bet and never chase losses with it."]
     ]
   }
 ];

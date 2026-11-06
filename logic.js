@@ -320,8 +320,28 @@ export const PICKERS = {
     const mk = marketsOf(m).dc.find((x) => x.k === (useHome ? "1X" : "X2"));
     return item(m, mk.k, mk.pick, pct, mk.odd, true);
   },
+  "over-1-5-goals": (m) => {
+    const pct = num(m.prediction?.over_15_pct);
+    return pct !== null && pct >= 78 ? item(m, "O1.5", "Over 1.5 goals", pct, m.odds?.over_15_goals) : null;
+  },
+  "over-3-5-goals": (m) => {
+    const pct = num(m.prediction?.over_35_pct);
+    return pct !== null && pct >= 38 ? item(m, "O3.5", "Over 3.5 goals", pct, m.odds?.over_35_goals) : null;
+  },
+  "both-teams-not-to-score": (m) => {
+    const y = num(m.prediction?.btts_yes_pct);
+    return y !== null && 100 - y >= 58 ? item(m, "NG", "Both teams not to score", 100 - y, m.odds?.btts_no) : null;
+  },
+  "double-chance-1x": (m) => dcPick(m, "1X", 75),
+  "double-chance-x2": (m) => dcPick(m, "X2", 70),
+  "double-chance-12": (m) => dcPick(m, "12", 80),
   "value-bets": (m) => valuePick(m, 0.03)
 };
+
+function dcPick(m, k, min) {
+  const d = marketsOf(m).dc.find((x) => x.k === k);
+  return d && num(d.pct) !== null && d.pct >= min ? item(m, k, d.pick, d.pct, d.odd, true) : null;
+}
 
 export function rankPicks(slug, matches) {
   const fn = PICKERS[slug];

@@ -13,6 +13,7 @@ import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMa
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
+import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -58,14 +59,22 @@ function makeCtx(req, board, live) {
 }
 
 // Builds one page: gets the data, runs the page function, wraps it in the layout.
-function route(build, { maxAge = 60, needsBoard = false } = {}) {
+// Live matches, with our pick attached when the match is on the board.
+function liveItems(matches, liveList) {
+  const byId = new Map(matches.map((m) => [m.id, m]));
+  return (liveList || []).map((l) => byId.get(l.id) || annotate([l], [l], [])[0]);
+}
+
+function route(build, { maxAge = 60, needsBoard = false, needsRecord = false } = {}) {
   return async (req, res) => {
     try {
       const [board0, live, done] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
       const board = { ...board0, matches: annotate(board0.matches, live.matches, done.results) };
       rememberFinished(board.matches);
       const ctx = makeCtx(req, board, live);
-      ctx.record = getRecord();
+      ctx.liveItems = liveItems(board.matches, live.matches);
+      if (needsRecord) ctx.record = await getRecord();
+      logPicks(board.matches); settleFinished(board.matches);
       ctx.scoresFor = (m) => annotate([m], live.matches, done.results)[0];
       if (needsBoard && !board.matches.length) {
         // No matches yet (odds-api is probably waking up). Show a friendly page that reloads itself.
@@ -99,7 +108,7 @@ const dayList = (board) => {
 };
 
 // ---------- pages ----------
-app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt }), { needsBoard: true }));
+app.get("/", route(({ ctx, board, live }) => V.homePage(ctx, { matches: board.matches, live: live.matches || [], updatedAt: board.updatedAt }), { needsBoard: true, needsRecord: true, maxAge: 20 }));
 
 app.get("/football-predictions-today", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: todayKey() }), { needsBoard: true }));
 app.get("/football-predictions-tomorrow", route(({ ctx, board }) => V.dayPage(ctx, { matches: board.matches, days: dayList(board), key: addDays(todayKey(), 1) }), { needsBoard: true }));
@@ -146,8 +155,8 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
   }
 });
 
-app.get("/live", route(({ ctx, live }) => V.livePage(ctx, { live: live.matches || [] }), { maxAge: 20 }));
-app.get("/results", route(async ({ ctx }) => V.resultsPage(ctx, { results: (await getResults()).results || [] }), { maxAge: 120 }));
+app.get("/live", route(({ ctx, board }) => V.livePage(ctx, { live: ctx.liveItems, upcoming: board.matches.filter((m) => !m.res || m.res.state === "pre") }), { maxAge: 10 }));
+app.get("/results", route(async ({ ctx }) => V.resultsPage(ctx, { results: (await getResults()).results || [] }), { maxAge: 60, needsRecord: true }));
 app.get("/favourites", route(({ ctx }) => V.favouritesPage(ctx), { maxAge: 300 }));
 for (const slug of Object.keys(PAGES)) app.get(`/${slug}`, route(({ ctx }) => V.staticPage(ctx, slug), { maxAge: 3600 }));
 
@@ -157,16 +166,17 @@ app.get("/api/live", async (req, res) => {
   const list = live.matches || [];
   const matches = annotate(board0.matches, list, done.results);
   rememberFinished(matches);
+  const items = liveItems(matches, list);
   res.set("Cache-Control", "no-store").json({
     count: list.length,
     ticker: V.tickerHtml(list, matches.filter((m) => m.res.state === "pre")),
-    list: V.liveList(list),
+    list: V.liveList(items),
     scores: scoreMap(matches)
   });
 });
 
 app.get("/api/status", (req, res) => {
-  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), ...status });
+  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), pickLog: LOG_ON ? logStatus : "off (set SUPABASE_URL and SUPABASE_SERVICE_KEY to turn on)", ...status });
 });
 
 // Debug: shows the SHAPE of a league table from odds-api (no keys, no secrets). Handy if a table looks empty.
@@ -222,4 +232,16 @@ app.listen(PORT, () => {
   console.log(`SportyPredictz running on port ${PORT}`);
   console.log(DEMO ? "ODDS_API_KEY_SPORTY is not set: showing DEMO data (and hiding from Google)." : `Using odds-api at ${API_BASE}`);
   startBoardLoop();
+  // Every 3 minutes, even with no visitors: save picks before kick-off and settle finished matches.
+  const tick = async () => {
+    try {
+      const [b0, live, done] = await Promise.all([getBoard(), getLive(), getResults()]);
+      const matches = annotate(b0.matches, live.matches, done.results);
+      rememberFinished(matches);
+      await logPicks(matches);
+      await settleFinished(matches);
+    } catch (e) { console.error("Background tick:", e.message); }
+  };
+  setTimeout(tick, 15 * 1000);
+  setInterval(tick, 3 * 60 * 1000).unref?.();
 });

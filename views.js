@@ -52,13 +52,15 @@ export function matchRow(m) {
   const hl = ps === "won" || ps === "lost" ? ` ${ps}` : "";
   const groups = Object.entries(mk).map(([id, list]) =>
     `<div class="mk mk-${id}" style="--n:${list.length}">${list.map((d) => oddBtn(m, d, pk && d.k === pk ? ` mp${hl}` : "")).join("")}</div>`).join("");
+  const pd = pk ? Object.values(mk).flat().find((d) => d.k === pk) : null;
   const line = tp
-    ? `<span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}`
+    ? `<span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}<span class="mbar"><i style="width:${Math.min(100, Math.round(tp.pct))}%"></i></span>`
     : `<span class="pkline none"><small>Pick</small><b>No clear pick</b></span>`;
   return `<article class="mrow pk" ${rowAttrs(m, pk)} data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
     ${whenEl(m, pk, false)}
     <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span>${scEl(m, "h")}</span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span>${scEl(m, "a")}</span></a>
     <div class="pkrow">${line}</div>
+    <div class="pkgo">${pd ? oddBtn(m, pd, ` mp${hl}`) : ""}<button type="button" class="more" aria-expanded="false" aria-label="All odds for ${esc(m.home.name)} v ${esc(m.away.name)}"><span>Odds</span></button></div>
     <div class="mks">${groups}</div>
     ${starBtn(m)}
   </article>`;
@@ -78,14 +80,15 @@ const recStrip = (rec) => rec.total ? `<div class="recbar"><b>${rec.won}<i>/${re
 const MK_LABELS = { "1x2": ["1", "X", "2"], goals: ["O1.5", "O2.5", "U2.5", "O3.5"], btts: ["GG", "NG"], dc: ["1X", "12", "X2"] };
 const mkHeader = () => `<span class="mkh">${Object.entries(MK_LABELS).map(([id, l]) => `<span class="mkh-${id}" style="--n:${l.length}">${l.map((x) => `<i>${x}</i>`).join("")}</span>`).join("")}</span>`;
 
-function leagueBlock(g, { limit = 0, moreHref = "" } = {}) {
+function leagueBlock(g, { limit = 0, moreHref = "", open = true } = {}) {
   const list = limit ? g.matches.slice(0, limit) : g.matches;
   const more = limit && g.matches.length > limit ? `<a class="seemore" href="${moreHref || leaguePath(g.league)}">All ${g.matches.length} matches in ${esc(g.league.name)} →</a>` : "";
-  return `<section class="lgblock" id="lg-${esc(g.league.id ?? "x")}">
-    <h3 class="lghead"><span class="lhl"><a href="${g.league.id != null ? leaguePath(g.league) : "#"}">${lgIcon(g.league)}<span>${esc(g.league.name)}</span></a><span class="n">${g.matches.length}</span></span>${mkHeader()}</h3>
+  return `<details class="lgblock" id="lg-${esc(g.league.id ?? "x")}"${open ? " open" : ""}>
+    <summary class="lghead"><span class="lhl">${lgIcon(g.league)}<span class="lname">${esc(g.league.name)}</span><span class="n">${g.matches.length}</span></span>${mkHeader()}<i class="chev" aria-hidden="true"></i></summary>
     ${list.map(matchRow).join("")}${more}
-  </section>`;
+  </details>`;
 }
+const leagueBlocks = (groups, o = {}) => groups.map((g, i) => leagueBlock(g, { ...o, open: i < (o.openN ?? 7) })).join("");
 
 function toolbar(groups) {
   const tabs = MARKET_TABS.map((t, i) => `<button type="button" class="mtab${i === 0 ? " on" : ""}" data-market="${t.id}">${t.name}</button>`).join("");
@@ -93,7 +96,7 @@ function toolbar(groups) {
     ? `<nav class="lgjump" aria-label="Jump to a league">${groups.map((g) => `<a href="#lg-${esc(g.league.id ?? "x")}">${esc(g.league.name)} <b>${g.matches.length}</b></a>`).join("")}</nav>`
     : "";
   return `<div class="toolbar"><div class="mtabs" role="tablist" aria-label="Betting market">${tabs}</div>
-    <label class="search"><span class="sr">Search</span><input type="search" data-search placeholder="Search a team or league" autocomplete="off"></label></div>${jump}
+    <label class="search"><span class="sr">Search</span><input type="search" data-search placeholder="Search a team or league" autocomplete="off"></label>${groups.length > 3 ? `<button type="button" class="lgtoggle" data-lgtoggle>Collapse all</button>` : ""}</div>${jump}
     <p class="mnote" data-mnote></p>`;
 }
 
@@ -119,8 +122,31 @@ const faqLd = (items) => ({
 });
 const faqHtml = (items) => `<section class="faq"><h2>Frequently asked questions</h2>${items.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</section>`;
 
-function catCards(counts = {}) {
-  return `<div class="catgrid">${CATEGORIES.map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span>${counts[c.slug] != null ? `<i>${counts[c.slug]} today</i>` : ""}</a>`).join("")}</div>`;
+const GROUP_ORDER = ["Match result", "Goals", "Both teams to score", "Double chance", "Smart picks", "Accumulators"];
+const isAcca = (c) => c.kind === "acca" || c.kind === "acca-hub";
+function catTile(c, counts) {
+  const n = counts[c.slug];
+  const tag = n == null ? "" : c.kind === "acca" ? `<i class="${n ? "" : "off"}">${n ? "Ready" : "Building"}</i>` : c.kind === "acca-hub" ? `<i>${n} ready</i>` : `<i class="${n ? "" : "off"}">${n} today</i>`;
+  return `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span>${tag}</a>`;
+}
+function catCards(counts = {}, { featured = false } = {}) {
+  if (featured) return `<div class="catgrid">${CATEGORIES.filter((c) => c.featured).map((c) => catTile(c, counts)).join("")}</div>`;
+  return GROUP_ORDER.map((g) => {
+    const list = CATEGORIES.filter((c) => c.group === g);
+    return list.length ? `<section class="catgroup"><h2 class="grp">${esc(g)}</h2><div class="catgrid">${list.map((c) => catTile(c, counts)).join("")}</div></section>` : "";
+  }).join("");
+}
+const liveOrPre = (m) => !m.res || m.res.state !== "ft";
+function countsFor(matches) {
+  const counts = {};
+  const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
+  let accas = 0;
+  for (const c of CATEGORIES) {
+    if (c.kind === "acca") { counts[c.slug] = buildAcca(upcoming, c.acca.target, c.acca.legs) ? 1 : 0; accas += counts[c.slug]; }
+    else if (c.kind !== "acca-hub") counts[c.slug] = rankPicks(c.slug, matches).filter((x) => !x.weak).length;
+  }
+  counts["accumulator-tips"] = accas;
+  return counts;
 }
 
 function cardStat(m, k) {
@@ -138,6 +164,12 @@ function pickCard(it) {
   </a>`;
 }
 
+const accaHtml = (name, acca, href = "") => acca
+  ? `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2><span class="acca-total">Total odds <b>${acca.total.toFixed(2)}</b></span></div>
+      ${acca.legs.map((l) => `<div class="leg" ${rowAttrs(l.m, l.k)}>${timeEl(l.m)}<a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="mono">${fmtOdd(l.odd)}</span></div>`).join("")}
+      <button type="button" class="btn solid" data-acca='${esc(JSON.stringify(acca.legs.map((l) => ({ mid: l.m.id, k: l.k, odd: l.odd.toFixed(2), pick: l.label, teams: `${l.m.home.name} v ${l.m.away.name}` }))))}'>Add all to pick slip</button></section>`
+  : `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2></div><div class="empty">Not enough strong picks to build this acca right now.</div></section>`;
+
 function pickRow(it) {
   const m = it.m;
   const e = it.edge;
@@ -153,17 +185,21 @@ function pickRow(it) {
   </article>`;
 }
 
-function liveRow(m) {
-  const sc = m.score || {};
-  const min = num(m.minute);
-  return `<article class="mrow live-row"><span class="when live">${min !== null ? `${min}'` : esc(m.period || "LIVE")}<small>LIVE</small></span>
-    <a class="teams" href="${matchPath(m)}"><span class="team">${crest(m.home)}<span class="nm">${esc(m.home.name)}</span></span><span class="team">${crest(m.away)}<span class="nm">${esc(m.away.name)}</span></span></a>
-    <div class="score"><b>${sc.home ?? "-"}</b><b>${sc.away ?? "-"}</b></div>${starBtn({ ...m, ts: m.ts })}</article>`;
+function liveCard(m) {
+  const tp = topPick(m);
+  const pk = tp ? tp.k : null;
+  const r = resOf(m);
+  return `<a class="lcard" href="${matchPath(m)}" ${rowAttrs(m, pk)} data-card>
+    <span class="lc-top"><span class="lc-lg">${esc(m.league.name)}</span><span class="lc-min"><i class="pulse"></i><span class="w-top">${esc(r.label || "LIVE")}</span></span></span>
+    <span class="lc-m">${crest(m.home)}<span class="lc-t">${esc(m.home.name)}</span>${scEl(m, "h")}</span>
+    <span class="lc-m">${crest(m.away)}<span class="lc-t">${esc(m.away.name)}</span>${scEl(m, "a")}</span>
+    ${tp ? `<span class="lc-foot"><span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}</span>` : ""}
+  </a>`;
 }
 
-export function liveList(live) {
-  if (!live.length) return `<div class="empty">No matches are live right now.<br>Check back around kick-off time.</div>`;
-  return groupByLeague(live).map((g) => `<section class="lgblock"><h3 class="lghead"><span>${lgIcon(g.league)}<span>${esc(g.league.name)}</span></span><span class="n">${g.matches.length}</span></h3>${g.matches.map(liveRow).join("")}</section>`).join("");
+export function liveList(items) {
+  if (!items.length) return `<div class="empty">No matches are live right now.<br>This page refreshes itself, so leave it open around kick-off time.</div>`;
+  return `<div class="lgrid">${items.map(liveCard).join("")}</div>`;
 }
 
 export function tickerHtml(live, upcoming) {
@@ -200,7 +236,7 @@ ${(ctx.verify || []).join("\n")}
 <meta name="twitter:card" content="summary"><meta name="theme-color" content="#06090d">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2306090d'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23b6ff3b' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23b6ff3b'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css?v=${ctx.v}">
 ${ld}
 </head>
@@ -245,25 +281,51 @@ const pageHead = (h1, sub, chips = "") => `<header class="pagehead"><h1>${esc(h1
 const chip = (n, label) => `<span class="statchip"><b>${esc(n)}</b>${esc(label)}</span>`;
 
 // ---------- pages ----------
+const ring = (p) => `<span class="ring" style="--pv:${Math.round(p)}"><b>${Math.round(p)}<i>%</i></b></span>`;
+
+function heroTiles(ctx, pod, liveItems, upcoming) {
+  const rec = ctx.record;
+  const podTile = pod ? `<a class="tile tile-pod" href="${matchPath(pod.m)}" ${rowAttrs(pod.m, pod.k)} data-card>
+      <span class="tile-k">Pick of the day</span>
+      <span class="pod-lg">${esc(pod.m.league.name)} · ${resOf(pod.m).state === "pre" ? timeEl(pod.m, "w-top") : `<span class="w-top">${esc(resOf(pod.m).label)}</span>`}</span>
+      <span class="pod-teams"><span>${esc(pod.m.home.name)}</span><i>v</i><span>${esc(pod.m.away.name)}</span></span>
+      <span class="pod-foot"><span class="pod-pick"><small>Model says</small><b>${esc(pod.label)}</b><span class="pod-meta">${pod.odd ? `<em>Odds ${pod.calc ? "~" : ""}${fmtOdd(pod.odd)}</em>` : ""}${pstEl(pod.m, pod.k)}</span></span>${ring(pod.pct)}</span>
+    </a>` : "";
+  const liveRows = liveItems.slice(0, 3).map((m) => `<span class="lt-row"><span class="lt-min">${esc(resOf(m).label || "LIVE")}</span><span class="lt-t">${esc(m.home.name)}</span><b>${scNum(m, "h")}–${scNum(m, "a")}</b><span class="lt-t r">${esc(m.away.name)}</span></span>`).join("");
+  const next = upcoming[0];
+  const liveTile = `<a class="tile tile-live" href="/live"><span class="tile-k"><i class="pulse${liveItems.length ? "" : " off"}"></i>Live now <b>${liveItems.length}</b></span>
+      ${liveRows || (next ? `<span class="lt-idle">No live games right now.<br>Next: <b>${esc(next.home.name)} v ${esc(next.away.name)}</b> at ${timeEl(next, "w-top")}</span>` : `<span class="lt-idle">No live games right now.</span>`)}
+      <span class="tile-link">${liveItems.length > 3 ? `+${liveItems.length - 3} more · ` : ""}All live scores →</span></a>`;
+  const recTile = rec && rec.total
+    ? `<a class="tile tile-rec" href="/results"><span class="tile-k">Our record</span><span class="rec-main">${ring(rec.rate ?? 0)}<span class="rec-txt"><b>${rec.won} of ${rec.total}</b><small>picks won on finished matches</small></span></span>
+        <span class="rec-groups">${(rec.groups || []).slice(0, 3).map((g) => `<span><small>${esc(g.name)}</small><b>${g.rate}%</b></span>`).join("")}</span></a>`
+    : `<a class="tile tile-rec" href="/results"><span class="tile-k">Our record</span><span class="rec-empty"><b>Tracking starts today</b><small>Every pick is saved before kick-off and marked Won or Lost at full time.</small></span></a>`;
+  return `<section class="hero" aria-label="Highlights">${podTile}${liveTile}${recTile}</section>`;
+}
+
 export function homePage(ctx, { matches, live, updatedAt }) {
   const today = todayKey();
   const todays = matches.filter((m) => dayKey(m.ts) === today);
   const pool = todays.length ? todays : matches;
   const groups = groupByLeague(pool);
   const bankers = rankPicks("banker-picks", matches);
-  const picks = (bankers.some((x) => x.m.res?.state !== "ft") ? bankers.filter((x) => x.m.res?.state !== "ft") : bankers).slice(0, 8);
-  const counts = {};
-  for (const c of CATEGORIES) if (c.slug !== "accumulator-tips") counts[c.slug] = rankPicks(c.slug, todays.length ? todays : matches).length;
+  const notDone = bankers.filter((x) => x.m.res?.state !== "ft");
+  const picks = (notDone.length ? notDone : bankers).slice(0, 8);
+  const pod = (notDone.find((x) => !x.m.res || x.m.res.state === "pre") || notDone[0] || null);
+  const liveItems = ctx.liveItems || [];
+  const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
+  const counts = countsFor(todays.length ? todays : matches);
   const dayLabel = todays.length ? "today" : "coming up";
   const body = `
   ${pageHead(`Football predictions ${todays.length ? "today" : "this week"}`, esc(longDate(Date.now())),
-    chip(pool.length, "matches") + chip(groups.length, "leagues") + chip(live.length, "live now") + (ctx.record && ctx.record.total >= 5 ? chip(`${ctx.record.rate}%`, "picks won") : ""))}
-  ${picks.length ? `<section class="block"><div class="block-head"><h2>Top picks right now</h2><a href="/predictions/banker-picks">All banker picks →</a></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
-  ${ctx.record && ctx.record.total ? `<section class="block"><div class="block-head"><h2>Recent results</h2><a href="/results">All results →</a></div>${recStrip(ctx.record)}<div class="pickrail">${ctx.record.list.slice(0, 8).map(recCard).join("")}</div></section>` : ""}
+    chip(pool.length, "matches") + chip(groups.length, "leagues") + chip(liveItems.length, "live now"))}
+  ${heroTiles(ctx, pod, liveItems, upcoming)}
   <section class="block"><div class="block-head"><h2>Matches ${dayLabel}</h2><a href="/football-predictions-today">Full list →</a></div>
-    ${pool.length ? toolbar(groups) + groups.slice(0, 5).map((g) => leagueBlock(g, { limit: 4, moreHref: "/football-predictions-today" })).join("") + (groups.length > 5 ? `<a class="btn solid wide" href="/football-predictions-today">See all ${pool.length} matches</a>` : "") : `<div class="empty">No matches loaded yet. Please refresh in a moment.</div>`}
+    ${pool.length ? toolbar(groups) + leagueBlocks(groups.slice(0, 6), { limit: 4, moreHref: "/football-predictions-today", openN: 3 }) + (groups.length > 6 ? `<a class="btn solid wide" href="/football-predictions-today">See all ${pool.length} matches</a>` : "") : `<div class="empty">No matches loaded yet. Please refresh in a moment.</div>`}
   </section>
-  <section class="block"><div class="block-head"><h2>Browse by bet type</h2><a href="/predictions">All categories →</a></div>${catCards(counts)}</section>
+  ${picks.length ? `<section class="block"><div class="block-head"><h2>Top picks right now</h2><a href="/predictions/banker-picks">All banker picks →</a></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
+  ${ctx.record && ctx.record.total ? `<section class="block"><div class="block-head"><h2>Recent results</h2><a href="/results">All results →</a></div><div class="pickrail">${ctx.record.list.slice(0, 8).map(recCard).join("")}</div></section>` : ""}
+  <section class="block"><div class="block-head"><h2>Browse by bet type</h2><a href="/predictions">All ${CATEGORIES.length} categories →</a></div>${catCards(counts, { featured: true })}</section>
   <section class="block"><div class="block-head"><h2>Leagues</h2><a href="/leagues">All leagues →</a></div><div class="leaguegrid">${ctx.leagues.slice(0, 12).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>
   <section class="prose"><h2>How we make football predictions</h2>${HOME.how.map((p) => `<p>${esc(p)}</p>`).join("")}<p><a href="/how-it-works">Read how to read the numbers →</a></p></section>
   ${faqHtml(HOME.faq)}`;
@@ -287,7 +349,7 @@ export function dayPage(ctx, { matches, days, key }) {
   ${crumbs([["Home", "/"], [`Predictions ${label}`, path]])}
   ${pageHead(`Football predictions ${label}`, `${esc(nice)} · ${list.length} matches · ${groups.length} leagues`)}
   ${dayTabs(days, key)}
-  ${list.length ? toolbar(groups) + groups.map((g) => leagueBlock(g)).join("") : `<div class="empty">No matches found for this day yet.<br>Try another day above.</div>`}
+  ${list.length ? toolbar(groups) + leagueBlocks(groups, { openN: 7 }) : `<div class="empty">No matches found for this day yet.<br>Try another day above.</div>`}
   <section class="prose"><h2>About these predictions</h2><p>Kick-off times are shown in your own time zone. Odds are a single market consensus price, and the model percentages are estimates. Tap any odds button to add it to your pick slip, or open a match for the full breakdown.</p></section>`;
   return {
     title: `Football Predictions ${key === today ? "Today" : key === addDays(today, 1) ? "Tomorrow" : nice}: Odds and Tips | ${SITE_NAME}`,
@@ -297,8 +359,7 @@ export function dayPage(ctx, { matches, days, key }) {
 }
 
 export function hubPage(ctx, { matches }) {
-  const counts = {};
-  for (const c of CATEGORIES) if (c.slug !== "accumulator-tips") counts[c.slug] = rankPicks(c.slug, matches).length;
+  const counts = countsFor(matches);
   const body = `${crumbs([["Home", "/"], ["Predictions", "/predictions"]])}
   ${pageHead("Football predictions by bet type", "Pick the kind of bet you like and see the matches the model rates best for it.")}
   ${catCards(counts)}`;
@@ -307,22 +368,26 @@ export function hubPage(ctx, { matches }) {
 
 export function categoryPage(ctx, { cat, matches }) {
   const path = `/predictions/${cat.slug}`;
-  const others = CATEGORIES.filter((c) => c.slug !== cat.slug);
+  const others = CATEGORIES.filter((c) => c.slug !== cat.slug && (c.group === cat.group || c.featured)).slice(0, 8);
   let list = "";
   let count = 0;
-  if (cat.slug === "accumulator-tips") {
-    const accas = [[2, 4, "2 odds acca"], [5, 7, "5 odds acca"]].map(([t, n, name]) => ({ name, acca: buildAcca(matches, t, n) }));
-    count = accas.filter((a) => a.acca).length;
-    list = accas.map(({ name, acca }) => acca
-      ? `<section class="acca"><div class="acca-head"><h2>${name}</h2><span class="acca-total">Total odds <b>${acca.total.toFixed(2)}</b></span></div>
-          ${acca.legs.map((l) => `<div class="leg">${timeEl(l.m)}<a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="mono">${fmtOdd(l.odd)}</span></div>`).join("")}
-          <button type="button" class="btn solid" data-acca='${esc(JSON.stringify(acca.legs.map((l) => ({ mid: l.m.id, k: l.k, odd: l.odd.toFixed(2), pick: l.label, teams: `${l.m.home.name} v ${l.m.away.name}` }))))}'>Add all to pick slip</button></section>`
-      : `<section class="acca"><h2>${name}</h2><div class="empty">Not enough strong picks to build this acca right now.</div></section>`).join("");
+  const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
+  if (cat.kind === "acca-hub") {
+    const four = CATEGORIES.filter((c) => c.kind === "acca");
+    const built = four.map((c) => ({ c, acca: buildAcca(upcoming, c.acca.target, c.acca.legs) }));
+    count = built.filter((x) => x.acca).length;
+    list = built.map(({ c, acca }) => accaHtml(c.name, acca, `/predictions/${c.slug}`)).join("");
+  } else if (cat.kind === "acca") {
+    const acca = buildAcca(upcoming, cat.acca.target, cat.acca.legs);
+    count = acca ? 1 : 0;
+    list = accaHtml(cat.name, acca);
   } else {
     const items = rankPicks(cat.slug, matches).slice(0, 40);
     count = items.length;
     const weak = items.length && items.every((x) => x.weak);
     const byDay = new Map();
+    const order = (it) => (it.m.res?.state === "live" ? 0 : it.m.res?.state === "ft" ? 2 : 1);
+    items.sort((a, b) => order(a) - order(b) || b.pct - a.pct);
     for (const it of items) {
       const k = dayKey(it.m.ts);
       if (!byDay.has(k)) byDay.set(k, []);
@@ -335,7 +400,7 @@ export function categoryPage(ctx, { cat, matches }) {
       : `<div class="empty">No matches meet this rule right now.<br>New picks appear as odds and probabilities refresh.</div>`;
   }
   const body = `${crumbs([["Home", "/"], ["Predictions", "/predictions"], [cat.name, path]])}
-  ${pageHead(cat.h1, esc(cat.short), chip(count, cat.slug === "accumulator-tips" ? "accas" : "picks"))}
+  ${pageHead(cat.h1, esc(cat.short), chip(count, isAcca(cat) ? (cat.kind === "acca-hub" ? "accas ready" : "acca ready") : "picks"))}
   ${list}
   <section class="prose"><h2>About ${esc(cat.name.toLowerCase())}</h2>${cat.intro.map((p) => `<p>${esc(p)}</p>`).join("")}</section>
   <section class="block"><div class="block-head"><h2>More prediction types</h2></div><div class="catgrid small">${others.map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>
@@ -439,10 +504,11 @@ export function matchPage(ctx, { m, related }) {
   };
 }
 
-export function livePage(ctx, { live }) {
+export function livePage(ctx, { live, upcoming = [] }) {
   const body = `${crumbs([["Home", "/"], ["Live scores", "/live"]])}
-  ${pageHead("Live football scores", "Scores update about every 30 seconds while you are on this page.")}
-  <div id="liveList" data-live-page>${liveList(live)}</div>`;
+  ${pageHead("Live football scores", "Updates by itself every 15 seconds. Each card shows whether our pick is winning.")}
+  <div id="liveList" data-live-page>${liveList(live)}</div>
+  ${upcoming.length ? `<section class="block"><div class="block-head"><h2>Kicking off next</h2><a href="/football-predictions-today">All matches →</a></div><div class="reclist">${upcoming.slice(0, 6).map((m) => { const tp = topPick(m); return `<a class="rec" href="${matchPath(m)}"><span class="rec-lg">${esc(m.league.name)} · ${timeEl(m, "w-top")}</span><span class="rec-m"><span>${esc(m.home.name)}</span><b><i>v</i></b><span>${esc(m.away.name)}</span></span>${tp ? `<span class="rec-p"><span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span></span>` : ""}</a>`; }).join("")}</div></section>` : ""}`;
   return { title: `Live Football Scores | ${SITE_NAME}`, desc: "Live football scores from leagues around the world, updated every 30 seconds.", path: "/live", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Live scores", "/live"]])] };
 }
 

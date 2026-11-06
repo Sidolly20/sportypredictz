@@ -60,7 +60,31 @@
     if (!inp) return;
     const q = inp.value.trim().toLowerCase();
     $$(".mrow[data-search], .prow[data-search]").forEach((r) => { r.hidden = !!q && !r.dataset.search.includes(q); });
-    $$(".lgblock").forEach((blk) => { blk.hidden = !!q && !$(".mrow:not([hidden]), .prow:not([hidden])", blk); });
+    $$(".lgblock").forEach((blk) => { blk.hidden = !!q && !$(".mrow:not([hidden]), .prow:not([hidden])", blk); if (q && !blk.hidden) blk.open = true; });
+  });
+
+  // ---------- phone rows: show all odds, league sections ----------
+  document.addEventListener("click", (e) => {
+    const more = e.target.closest(".more");
+    if (more) {
+      const row = more.closest(".mrow");
+      const on = row.classList.toggle("open");
+      more.setAttribute("aria-expanded", on ? "true" : "false");
+      return;
+    }
+    const tg = e.target.closest("[data-lgtoggle]");
+    if (tg) {
+      const closing = tg.dataset.state !== "closed";
+      $$("details.lgblock").forEach((d) => { d.open = !closing; });
+      tg.dataset.state = closing ? "closed" : "open";
+      tg.textContent = closing ? "Expand all" : "Collapse all";
+      return;
+    }
+    const jump = e.target.closest(".lgjump a");
+    if (jump) {
+      const d = document.querySelector(jump.getAttribute("href"));
+      if (d && d.tagName === "DETAILS") d.open = true;
+    }
   });
 
   // ---------- pick slip ----------
@@ -204,7 +228,11 @@
         top.removeAttribute("data-t");
         top.textContent = el.hasAttribute("data-card") && h !== null ? `${label} ${h}\u2013${a}` : label;
       }
-      $$(".sc", el).forEach((n) => { const v = n.dataset.side === "h" ? h : a; n.textContent = v === null || v === undefined ? "\u2013" : v; });
+      $$(".sc", el).forEach((n) => {
+        const v = n.dataset.side === "h" ? h : a;
+        const txt = v === null || v === undefined ? "\u2013" : String(v);
+        if (n.textContent !== txt) { n.textContent = txt; n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash"); }
+      });
       const ps = el.dataset.pk ? judge(el.dataset.pk, h, a, state === "ft") : null;
       const chip = $(".pst", el);
       if (chip) { chip.hidden = false; chip.className = "pst " + (ps || "pend"); chip.textContent = ps ? PICK_TXT[ps] : state === "wait" ? "Started" : "Pending"; }
@@ -230,7 +258,7 @@
       applyScores(d.scores);
     } catch { /* keep what is on screen */ }
   }
-  setInterval(pollLive, 45 * 1000);
+  setInterval(pollLive, 15 * 1000);
 
   // ---------- start ----------
   localTimes();
