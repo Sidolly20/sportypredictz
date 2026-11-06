@@ -226,15 +226,15 @@ function matchAngle(m, standings) {
     const mk = (price) => (1 / price) * 100;
     const gapH = num(p.home_win_pct) - mk(o.home_win), gapA = num(p.away_win_pct) - (num(o.away_win) ? mk(o.away_win) : 0);
     const side = Math.abs(gapH) >= Math.abs(gapA) ? { t: h, g: gapH, pct: num(p.home_win_pct), price: o.home_win } : { t: a, g: gapA, pct: num(p.away_win_pct), price: o.away_win };
-    if (Math.abs(side.g) >= 4) C.push({ score: 8 + jit("value"), text: `The model rates ${side.t} at ${Math.round(side.pct)}%, while the price of ${fmtOdd(side.price)} implies about ${Math.round(mk(side.price))}%. That ${side.g > 0 ? "gap" : "shortfall"} of ${Math.abs(Math.round(side.g))} points is the main thing to weigh here.` });
+    if (Math.abs(side.g) >= 4) C.push({ score: 8 + jit("value"), text: `${side.t}: model ${Math.round(side.pct)}% vs price ${Math.round(mk(side.price))}%, a ${Math.abs(Math.round(side.g))}-point ${side.g > 0 ? "edge" : "shortfall"}.` });
   }
   const xg = p && p.expected_goals;
   if (xg && num(xg.home) !== null && num(xg.away) !== null) {
     const total = num(xg.home) + num(xg.away);
-    if (total >= 3 || total <= 2.1) C.push({ score: 6 + jit("goals"), text: `The model expects about ${total.toFixed(1)} goals between the two sides (${h} ${num(xg.home).toFixed(1)}, ${a} ${num(xg.away).toFixed(1)}), which points to a ${total >= 3 ? "open game" : "tight, low-scoring game"}.` });
+    if (total >= 3 || total <= 2.1) C.push({ score: 6 + jit("goals"), text: `Model expects ${total.toFixed(1)} goals: ${total >= 3 ? "an open game" : "a tight, low-scoring game"}.` });
   }
   if (p && num(p.draw_pct) !== null && Math.max(num(p.home_win_pct) || 0, num(p.away_win_pct) || 0, num(p.draw_pct)) < 45) {
-    C.push({ score: 6 + jit("toss"), text: `No side is clear on our numbers: the highest of home, draw and away is under 45%, so this one is close to a coin toss.` });
+    C.push({ score: 6 + jit("toss"), text: `No side above 45% on our numbers: a genuine coin toss.` });
   }
   const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
   if (rows.length >= 6) {
@@ -243,7 +243,7 @@ function matchAngle(m, standings) {
     const fourth = sorted[3], safe = sorted[sorted.length - 4];
     if (hr && ar) {
       const near = [[hr, "Home"], [ar, "Away"]].map(([r, lab]) => ({ r, lab, d: Math.min(Math.abs(r.pts - fourth.pts), Math.abs(r.pts - safe.pts)) })).sort((x, y) => x.d - y.d)[0];
-      if (near.d <= 3) C.push({ score: 7 + jit("stakes"), text: `${near.r.team} are ${ord(near.r.pos)} on ${near.r.pts} points, within ${near.d} of a key line in the table (fourth place or the drop zone), so the result matters beyond this match.` });
+      if (near.d <= 3) C.push({ score: 7 + jit("stakes"), text: `${near.r.team} sit ${ord(near.r.pos)} on ${near.r.pts} points, ${near.d} from a key line.` });
     }
   }
   C.sort((x, y) => y.score - x.score);
@@ -636,7 +636,7 @@ export function leaguePage(ctx, { league, matches, standings, allLeagues }) {
   const body = `${crumbs([["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])}
   <header class="pagehead lghero">${lgIcon(league)}<div><h1>${esc(league.name)} predictions, odds and table</h1><p>${matches.length ? `${matches.length} upcoming matches with odds and model probabilities.` : "No upcoming matches are loaded for this league right now."}</p></div></header>
   ${picks.length ? `<section class="block"><div class="block-head"><h2>Best picks in ${esc(league.name)}</h2></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
-  ${storyHtml(st)}
+  ${leaguePulse(league, matches, standings, ctx)}
   <section class="block"><div class="block-head"><h2>Upcoming matches</h2></div>${matches.length ? toolbar(groups) + groups.map((g) => leagueBlock(g)).join("") : `<div class="empty">Nothing scheduled in the next few days.</div>`}</section>
   <section class="block"><div class="block-head"><h2>${esc(league.name)} table</h2></div>${table || `<div class="empty">A table is not available for this league yet.</div>`}</section>
   <section class="block"><div class="block-head"><h2>Other leagues</h2></div><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>`;
@@ -708,6 +708,85 @@ function stakesBlock(m, standings) {
   return `<section class="block stakes"><h2>What's at stake</h2><p>${esc(sentence(h))}. ${esc(sentence(a))}.</p><p>${esc(lift)} ${esc(drop)}</p></section>`;
 }
 
+// ---------- visual blocks: charts and stat cards instead of paragraphs ----------
+const abbr = (n) => String(n || "").split(/\s+/).filter(Boolean).slice(0, 3).map((w) => w[0]).join("").toUpperCase();
+const barPct = (v, max) => `${Math.max(0, Math.min(100, ((Number(v) || 0) / (max || 1)) * 100)).toFixed(1)}%`;
+const statTile = (label, value, sub = "") => `<div class="tile-stat"><small>${esc(label)}</small><b>${esc(value)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}</div>`;
+
+function leaguePulse(league, matches, standings, ctx) {
+  const f = leagueFacts(league, matches, ctx, standings);
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  const sorted = [...rows].sort((a, b) => a.pos - b.pos);
+  const finished = f.done.filter((m) => Number.isFinite(resOf(m).h) && Number.isFinite(resOf(m).a));
+  const totals = finished.map((m) => resOf(m).h + resOf(m).a);
+  const over25 = totals.length ? Math.round((100 * totals.filter((t) => t > 2.5).length) / totals.length) : null;
+  const modelOver = avgPct(f.o25);
+  const tiles = [];
+  if (rows.length >= 6 && rows.every((r) => Number.isFinite(r.gf))) {
+    const played = rows.reduce((s, r) => s + r.p, 0);
+    tiles.push(statTile("Goals a game", (rows.reduce((s, r) => s + r.gf, 0) / (played / 2)).toFixed(2), "across the table"));
+  } else if (totals.length) {
+    tiles.push(statTile("Goals a game", (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(2), `from ${finished.length} finished`));
+  }
+  if (over25 !== null) tiles.push(statTile("Over 2.5", `${over25}%`, `of ${finished.length} finished`));
+  if (modelOver !== null) tiles.push(statTile("Model over 2.5", `${modelOver}%`, "games to play"));
+  tiles.push(statTile("To play", String(f.ahead.length), f.now.length ? `${f.now.length} live now` : "next few days"));
+  if (f.recs.length >= 3) tiles.push(statTile("Our picks", `${f.won}/${f.recs.length}`, "came in here"));
+
+  let ladder = "";
+  if (sorted.length >= 6) {
+    const max = Math.max(...sorted.map((r) => r.pts), 1);
+    const line = (r) => `<div class="lrow${r.pos <= 4 ? " top" : ""}"><span class="lpos">${r.pos}</span><span class="lname">${esc(r.team)}</span><span class="ltrack"><i style="width:${barPct(r.pts, max)}"></i></span><b class="mono">${r.pts}</b></div>`;
+    ladder = `<div class="card ladder"><div class="card-head"><h3>Points</h3><small>${esc(league.name)}</small></div>
+      ${sorted.slice(0, 6).map(line).join("")}
+      <div class="cut"><span>Top four above, bottom three below</span></div>
+      ${sorted.slice(-3).map((r) => line(r).replace('class="lrow', 'class="lrow drop"')).join("")}</div>`;
+  }
+
+  const formed = sorted.filter((r) => typeof r.form === "string" && /^[WDL]{3,}$/i.test(r.form)).slice(0, 6);
+  const formCard = formed.length ? `<div class="card"><div class="card-head"><h3>Last five</h3><small>W · D · L</small></div>
+    ${formed.map((r) => `<div class="frow"><span class="fname">${esc(r.team)}</span><span class="dots">${[...r.form.slice(-5).toUpperCase()].map((c) => `<i class="${c === "W" ? "w" : c === "D" ? "d" : "l"}"></i>`).join("")}</span><b class="mono">${[...r.form.slice(-5).toUpperCase()].reduce((t, c) => t + (c === "W" ? 3 : c === "D" ? 1 : 0), 0)}</b></div>`).join("")}</div>` : "";
+
+  const fx = f.ahead.filter((m) => m.prediction).slice(0, 6).map((m) => {
+    const p = m.prediction;
+    const h = num(p.home_win_pct) || 0, d = num(p.draw_pct) || 0, a = num(p.away_win_pct) || 0;
+    const t = h + d + a || 1;
+    return `<div class="fx"><div class="fx-head"><span>${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><small class="mono">${esc(clock(m.ts))}</small></div>
+      <div class="chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div>
+      <div class="chance-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
+  }).join("");
+  const fxCard = fx ? `<div class="card"><div class="card-head"><h3>Model chances</h3><small>to play</small></div>${fx}</div>` : "";
+
+  if (!tiles.length && !ladder && !formCard && !fxCard) return "";
+  return `<section class="block pulse">
+    <div class="tiles">${tiles.join("")}</div>
+    <div class="pulse-grid">${ladder}${formCard}${fxCard}</div>
+  </section>`;
+}
+
+// Match page: both sides on the points scale, with the top-four and safety lines and the home-win position.
+function stakesVisual(m, standings) {
+  if (resOf(m).state !== "pre") return "";
+  const rows = ((standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || []).filter((r) => r.p && r.pts !== null);
+  if (rows.length < 6) return "";
+  const sorted = [...rows].sort((a, b) => a.pos - b.pos);
+  const h = sorted.find((r) => r.team === m.home.name), a = sorted.find((r) => r.team === m.away.name);
+  if (!h || !a) return "";
+  const fourth = sorted[3], safe = sorted[sorted.length - 4];
+  const max = Math.max(...rows.map((r) => r.pts), h.pts + 3, 1) + 2;
+  const at = (v) => barPct(v, max);
+  const mk = (r, cls) => `<span class="mk ${cls}" style="left:${at(r.pts)}"><b>${esc(abbr(r.team))}</b><small>${r.pts} pts · ${ord(r.pos)}</small></span>`;
+  return `<section class="block stakes-v"><div class="block-head"><h2>Table stakes</h2></div>
+    <div class="card stake-card">
+      <div class="track">
+        <i class="line" style="left:${at(fourth.pts)}"><em>4th · ${fourth.pts}</em></i>
+        <i class="line safe" style="left:${at(safe.pts)}"><em>safe · ${safe.pts}</em></i>
+        <i class="ghost" style="left:${at(h.pts + 3)}"><em>home win</em></i>
+        ${mk(h, "home")}${mk(a, "away")}
+      </div>
+    </div></section>`;
+}
+
 export function matchPage(ctx, { m, related, standings = null }) {
   const path = matchPath(m);
   const p = m.prediction;
@@ -735,9 +814,9 @@ export function matchPage(ctx, { m, related, standings = null }) {
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}
   </section>
   ${compareTable(m) ? `<section class="block"><h2>${esc(m.home.name)} vs ${esc(m.away.name)}: comparison</h2><div class="tablewrap">${compareTable(m)}</div><p class="mnote show">The greener side leads on that line. Edge is model chance × odds − 1.</p></section>` : ""}
-  ${(() => { const t = matchAngle(m, standings); return t ? `<section class="block angle"><h2>The angle on this match</h2><p>${esc(t)}</p></section>` : ""; })()}
-  ${stakesBlock(m, standings)}
-  <section class="prose"><h2>Match analysis</h2>${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</section>
+  ${(() => { const t = matchAngle(m, standings); return t ? `<div class="chip-angle"><span>Angle</span>${esc(t)}</div>` : ""; })()}
+  ${stakesVisual(m, standings)}
+  <details class="more"><summary>Full match analysis<span>Tap to read</span></summary><div class="prose">${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</div></details>
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}
   <section class="block"><div class="block-head"><h2>More prediction types</h2><a href="/predictions">All →</a></div><div class="catgrid small">${CATEGORIES.slice(0, 6).map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>`;
   const iso = m.kickoff || undefined;
