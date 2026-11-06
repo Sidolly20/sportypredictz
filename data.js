@@ -3,7 +3,7 @@
 // It is never put into any page.
 
 import { demoWindow, demoLive, demoResults, demoStandings } from "./demo.js";
-import { normMatch, num, todayKey, addDays } from "./logic.js";
+import { normMatch, num, todayKey, addDays, topPick, judge } from "./logic.js";
 
 export const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
 export const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
@@ -284,4 +284,22 @@ export async function standingsShape(id) {
     return v;
   };
   return sample(d);
+}
+
+// ---------- track record: how our picks did on matches that have finished ----------
+// Remembered in memory for 3 days (it starts again from empty if the server restarts).
+const record = new Map();
+export function rememberFinished(matches) {
+  for (const m of matches) {
+    if (!m.res || m.res.state !== "ft" || record.has(m.id)) continue;
+    const pick = topPick(m);
+    if (pick) record.set(m.id, { m, pick, h: m.res.h, a: m.res.a });
+  }
+  const cut = Date.now() - 72 * 3600e3;
+  for (const [id, r] of record) if (r.m.ts < cut) record.delete(id);
+}
+export function getRecord() {
+  const list = [...record.values()].sort((a, b) => b.m.ts - a.m.ts).map((r) => ({ ...r, state: judge(r.pick.k, r.h, r.a, true) }));
+  const won = list.filter((r) => r.state === "won").length;
+  return { list, won, total: list.length, rate: list.length ? Math.round((won / list.length) * 100) : null };
 }

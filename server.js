@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError } from "./data.js";
+import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
@@ -63,7 +63,9 @@ function route(build, { maxAge = 60, needsBoard = false } = {}) {
     try {
       const [board0, live, done] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
       const board = { ...board0, matches: annotate(board0.matches, live.matches, done.results) };
+      rememberFinished(board.matches);
       const ctx = makeCtx(req, board, live);
+      ctx.record = getRecord();
       ctx.scoresFor = (m) => annotate([m], live.matches, done.results)[0];
       if (needsBoard && !board.matches.length) {
         // No matches yet (odds-api is probably waking up). Show a friendly page that reloads itself.
@@ -154,6 +156,7 @@ app.get("/api/live", async (req, res) => {
   const [board0, live, done] = await Promise.all([getBoard(), getLive(), withTimeout(getResults(), 4000, { results: [] })]);
   const list = live.matches || [];
   const matches = annotate(board0.matches, list, done.results);
+  rememberFinished(matches);
   res.set("Cache-Control", "no-store").json({
     count: list.length,
     ticker: V.tickerHtml(list, matches.filter((m) => m.res.state === "pre")),

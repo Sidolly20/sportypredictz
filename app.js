@@ -207,7 +207,7 @@
       $$(".sc", el).forEach((n) => { const v = n.dataset.side === "h" ? h : a; n.textContent = v === null || v === undefined ? "\u2013" : v; });
       const ps = el.dataset.pk ? judge(el.dataset.pk, h, a, state === "ft") : null;
       const chip = $(".pst", el);
-      if (chip) { chip.hidden = !ps; chip.className = "pst" + (ps ? " " + ps : ""); chip.textContent = ps ? PICK_TXT[ps] : ""; }
+      if (chip) { chip.hidden = false; chip.className = "pst " + (ps || "pend"); chip.textContent = ps ? PICK_TXT[ps] : state === "wait" ? "Started" : "Pending"; }
       const mp = $(".odd.mp", el);
       if (mp) { mp.classList.toggle("won", ps === "won"); mp.classList.toggle("lost", ps === "lost"); }
     });
