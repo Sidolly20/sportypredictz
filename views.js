@@ -708,10 +708,10 @@ function stakesBlock(m, standings) {
   return `<section class="block stakes"><h2>What's at stake</h2><p>${esc(sentence(h))}. ${esc(sentence(a))}.</p><p>${esc(lift)} ${esc(drop)}</p></section>`;
 }
 
-// ---------- visual blocks: charts and stat cards instead of paragraphs ----------
+// ---------- visual blocks (v4: class names prefixed so they cannot clash with existing styles) ----------
 const abbr = (n) => String(n || "").split(/\s+/).filter(Boolean).slice(0, 3).map((w) => w[0]).join("").toUpperCase();
 const barPct = (v, max) => `${Math.max(0, Math.min(100, ((Number(v) || 0) / (max || 1)) * 100)).toFixed(1)}%`;
-const statTile = (label, value, sub = "") => `<div class="tile-stat"><small>${esc(label)}</small><b>${esc(value)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}</div>`;
+const statTile = (label, value, sub = "") => `<div class="v4-tile"><small>${esc(label)}</small><b>${esc(value)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}</div>`;
 
 function leaguePulse(league, matches, standings, ctx) {
   const f = leagueFacts(league, matches, ctx, standings);
@@ -736,32 +736,29 @@ function leaguePulse(league, matches, standings, ctx) {
   let ladder = "";
   if (sorted.length >= 6) {
     const max = Math.max(...sorted.map((r) => r.pts), 1);
-    const line = (r) => `<div class="lrow${r.pos <= 4 ? " top" : ""}"><span class="lpos">${r.pos}</span><span class="lname">${esc(r.team)}</span><span class="ltrack"><i style="width:${barPct(r.pts, max)}"></i></span><b class="mono">${r.pts}</b></div>`;
-    ladder = `<div class="card ladder"><div class="card-head"><h3>Points</h3><small>${esc(league.name)}</small></div>
-      ${sorted.slice(0, 6).map(line).join("")}
-      <div class="cut"><span>Top four above, bottom three below</span></div>
-      ${sorted.slice(-3).map((r) => line(r).replace('class="lrow', 'class="lrow drop"')).join("")}</div>`;
+    const row = (r, extra) => `<div class="v4-row${extra}"><span class="v4-pos">${r.pos}</span><span class="v4-name">${esc(r.team)}</span><span class="v4-bar"><i style="width:${barPct(r.pts, max)}"></i></span><b class="mono">${r.pts}</b></div>`;
+    ladder = `<div class="v4-card v4-ladder"><div class="v4-head"><h3>Points</h3><small>${esc(league.name)}</small></div>
+      ${sorted.slice(0, 6).map((r) => row(r, r.pos <= 4 ? " top" : "")).join("")}
+      <div class="v4-cut"><span>Bottom three</span></div>
+      ${sorted.slice(-3).map((r) => row(r, " drop")).join("")}</div>`;
   }
 
   const formed = sorted.filter((r) => typeof r.form === "string" && /^[WDL]{3,}$/i.test(r.form)).slice(0, 6);
-  const formCard = formed.length ? `<div class="card"><div class="card-head"><h3>Last five</h3><small>W · D · L</small></div>
-    ${formed.map((r) => `<div class="frow"><span class="fname">${esc(r.team)}</span><span class="dots">${[...r.form.slice(-5).toUpperCase()].map((c) => `<i class="${c === "W" ? "w" : c === "D" ? "d" : "l"}"></i>`).join("")}</span><b class="mono">${[...r.form.slice(-5).toUpperCase()].reduce((t, c) => t + (c === "W" ? 3 : c === "D" ? 1 : 0), 0)}</b></div>`).join("")}</div>` : "";
+  const formCard = formed.length ? `<div class="v4-card"><div class="v4-head"><h3>Last five</h3><small>W · D · L</small></div>
+    ${formed.map((r) => { const s = [...r.form.slice(-5).toUpperCase()]; const pts = s.reduce((t, c) => t + (c === "W" ? 3 : c === "D" ? 1 : 0), 0); return `<div class="v4-form"><span class="v4-fname">${esc(r.team)}</span><span class="v4-dots">${s.map((c) => `<i class="${c === "W" ? "w" : c === "D" ? "d" : "l"}"></i>`).join("")}</span><b class="mono">${pts}</b></div>`; }).join("")}</div>` : "";
 
   const fx = f.ahead.filter((m) => m.prediction).slice(0, 6).map((m) => {
     const p = m.prediction;
     const h = num(p.home_win_pct) || 0, d = num(p.draw_pct) || 0, a = num(p.away_win_pct) || 0;
     const t = h + d + a || 1;
-    return `<div class="fx"><div class="fx-head"><span>${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><small class="mono">${esc(clock(m.ts))}</small></div>
-      <div class="chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div>
-      <div class="chance-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
+    return `<div class="v4-fx"><div class="v4-fx-head"><span>${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><small class="mono">${esc(clock(m.ts))}</small></div>
+      <div class="v4-chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div>
+      <div class="v4-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
   }).join("");
-  const fxCard = fx ? `<div class="card"><div class="card-head"><h3>Model chances</h3><small>to play</small></div>${fx}</div>` : "";
+  const fxCard = fx ? `<div class="v4-card"><div class="v4-head"><h3>Model chances</h3><small>to play</small></div>${fx}</div>` : "";
 
   if (!tiles.length && !ladder && !formCard && !fxCard) return "";
-  return `<section class="block pulse">
-    <div class="tiles">${tiles.join("")}</div>
-    <div class="pulse-grid">${ladder}${formCard}${fxCard}</div>
-  </section>`;
+  return `<section class="block v4-pulse"><div class="v4-tiles">${tiles.join("")}</div>${ladder}${formCard}${fxCard}</section>`;
 }
 
 // Match page: both sides on the points scale, with the top-four and safety lines and the home-win position.
@@ -775,13 +772,13 @@ function stakesVisual(m, standings) {
   const fourth = sorted[3], safe = sorted[sorted.length - 4];
   const max = Math.max(...rows.map((r) => r.pts), h.pts + 3, 1) + 2;
   const at = (v) => barPct(v, max);
-  const mk = (r, cls) => `<span class="mk ${cls}" style="left:${at(r.pts)}"><b>${esc(abbr(r.team))}</b><small>${r.pts} pts · ${ord(r.pos)}</small></span>`;
-  return `<section class="block stakes-v"><div class="block-head"><h2>Table stakes</h2></div>
-    <div class="card stake-card">
-      <div class="track">
-        <i class="line" style="left:${at(fourth.pts)}"><em>4th · ${fourth.pts}</em></i>
-        <i class="line safe" style="left:${at(safe.pts)}"><em>safe · ${safe.pts}</em></i>
-        <i class="ghost" style="left:${at(h.pts + 3)}"><em>home win</em></i>
+  const mk = (r, cls) => `<span class="v4-mk ${cls}" style="left:${at(r.pts)}"><b>${esc(abbr(r.team))}</b><small>${r.pts} pts · ${ord(r.pos)}</small></span>`;
+  return `<section class="block v4-stakes"><div class="block-head"><h2>Table stakes</h2></div>
+    <div class="v4-card v4-stake">
+      <div class="v4-track">
+        <i class="v4-line" style="left:${at(fourth.pts)}"><em>4th · ${fourth.pts}</em></i>
+        <i class="v4-line safe" style="left:${at(safe.pts)}"><em>safe · ${safe.pts}</em></i>
+        <i class="v4-ghost" style="left:${at(h.pts + 3)}"><em>home win</em></i>
         ${mk(h, "home")}${mk(a, "away")}
       </div>
     </div></section>`;
@@ -814,9 +811,9 @@ export function matchPage(ctx, { m, related, standings = null }) {
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}
   </section>
   ${compareTable(m) ? `<section class="block"><h2>${esc(m.home.name)} vs ${esc(m.away.name)}: comparison</h2><div class="tablewrap">${compareTable(m)}</div><p class="mnote show">The greener side leads on that line. Edge is model chance × odds − 1.</p></section>` : ""}
-  ${(() => { const t = matchAngle(m, standings); return t ? `<div class="chip-angle"><span>Angle</span>${esc(t)}</div>` : ""; })()}
+  ${(() => { const t = matchAngle(m, standings); return t ? `<div class="v4-chip"><span>Angle</span>${esc(t)}</div>` : ""; })()}
   ${stakesVisual(m, standings)}
-  <details class="more"><summary>Full match analysis<span>Tap to read</span></summary><div class="prose">${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</div></details>
+  <details class="v4-more"><summary>Full match analysis<span>Tap to read</span></summary><div class="v4-prose">${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</div></details>
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}
   <section class="block"><div class="block-head"><h2>More prediction types</h2><a href="/predictions">All →</a></div><div class="catgrid small">${CATEGORIES.slice(0, 6).map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>`;
   const iso = m.kickoff || undefined;
