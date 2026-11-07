@@ -1110,3 +1110,13 @@ details.v4-more[open] > summary::after { content: "–"; }
   .lgb-go { display: none; }
   .lgb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Contact buttons */
+.cbtns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0 20px; }
+.cbtn { text-align: left; display: grid; gap: 4px; padding: 16px; border-radius: 16px; border: 1px solid var(--line2); background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
+.cbtn:hover { border-color: var(--acid); }
+.cbtn b { font-size: 1rem; }
+.cbtn span { color: var(--mute); font-size: .84rem; }
+@media (max-width: 560px) { .cbtns { grid-template-columns: 1fr; } }
+.linkish { background: none; border: 0; padding: 0; color: var(--acid); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.join-btn { border: 0; cursor: pointer; font: inherit; }

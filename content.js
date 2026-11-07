@@ -393,13 +393,14 @@ export const CONTACT = {
 export const PAGES = {
   contact: {
     title: "Contact SportyPredictz",
-    desc: "Contact SportyPredictz on WhatsApp, Telegram or email. Questions about the predictions, the site or a bug report are welcome.",
+    desc: "Get in touch with SportyPredictz by email, WhatsApp or Telegram. Questions about a prediction, the site or a bug are welcome.",
     h1: "Contact us",
     body: [
-      `<p>Questions about a prediction, a page that looks wrong, or a bug you have spotted? Get in touch using whichever channel suits you best.</p>`,
-      `<h2>WhatsApp</h2><p>Message us on WhatsApp at <a href="${CONTACT.whatsappLink}" rel="noopener">${CONTACT.whatsapp}</a>.</p>`,
-      `<h2>Telegram</h2><p>Direct messages: <a href="${CONTACT.telegramPersonalLink}" rel="noopener">${CONTACT.telegramPersonal}</a>.</p><p>Our public channel, with daily updates: <a href="${CONTACT.channelLink}" rel="noopener">${CONTACT.channel}</a>.</p>`,
-      `<h2>Email</h2><p>Write to <a href="${CONTACT.emailLink}">${CONTACT.email}</a>. Please include the page address if your message is about a specific match or league.</p>`,
+      `<p>Questions about a prediction, a page that looks wrong, or a bug you have spotted? Choose the channel that suits you.</p>`,
+      `<div class="cbtns"><button type="button" class="cbtn" data-contact="email"><b>Email us</b><span>Longer questions and bug reports</span></button>`
+      + `<button type="button" class="cbtn" data-contact="whatsapp"><b>WhatsApp</b><span>Quick questions</span></button>`
+      + `<button type="button" class="cbtn" data-contact="telegram"><b>Telegram</b><span>Direct messages</span></button>`
+      + `<button type="button" class="cbtn" data-contact="channel"><b>Telegram channel</b><span>Daily updates and results</span></button></div>`,
       `<h2>What we do with your message</h2><p>We only use the details you send to reply to you. We do not sell them or add them to a mailing list without asking first. We are not able to give personal betting advice; the predictions on this site are the same for everyone.</p>`
     ]
   },

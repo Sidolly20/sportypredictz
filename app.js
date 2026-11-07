@@ -281,3 +281,22 @@
   tick();
   setInterval(tick, 30000);
 })();
+
+// Contact buttons. The addresses are not written into the page; they are assembled only when someone clicks.
+(function () {
+  const T = {
+    email: "bWFpbHRvOmFsbG90aXBzOEBnbWFpbC5jb20=",
+    whatsapp: "aHR0cHM6Ly93YS5tZS8yMzQ5MTU0Njk3NTA3",
+    telegram: "aHR0cHM6Ly90Lm1lL0FpYW1fQg==",
+    channel: "aHR0cHM6Ly90Lm1lL3Nwb3J0eXByZWRpY3R6MQ=="
+  };
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-contact]");
+    if (!b) return;
+    const enc = T[b.dataset.contact];
+    if (!enc) return;
+    const url = atob(enc);
+    if (url.startsWith("mailto:")) window.location.href = url;
+    else window.open(url, "_blank", "noopener");
+  });
+})();

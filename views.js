@@ -4,7 +4,7 @@ import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
   matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick
 } from "./logic.js";
-import { CATEGORIES, CAT_BY_SLUG, CONTACT, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
+import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
 
 // Optional analytics (GoatCounter: no cookies, counts visits only). Off unless GOATCOUNTER_CODE is set in Render.
 const GC_CODE = /^[a-z0-9-]{2,40}$/i.test(process.env.GOATCOUNTER_CODE || "") ? process.env.GOATCOUNTER_CODE : "";
@@ -468,7 +468,7 @@ ${o.body}
 </main>
 <footer class="foot">
   <div class="foot-grid">
-    <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p><p class="foot-join"><a href="${CONTACT.channelLink}" rel="noopener">Telegram channel</a> · <a href="${CONTACT.whatsappLink}" rel="noopener">WhatsApp</a> · <a href="${CONTACT.emailLink}">Email</a></p></div>
+    <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p><p class="foot-join"><button type="button" class="linkish" data-contact="channel">Telegram channel</button> · <button type="button" class="linkish" data-contact="whatsapp">WhatsApp</button> · <button type="button" class="linkish" data-contact="email">Email</button></p></div>
     <div class="foot-col"><h5>Predictions</h5>${CATEGORIES.slice(0, 6).map((c) => `<a href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}<a href="/predictions">See all tips</a></div>
     <div class="foot-col"><h5>Football</h5><a href="/football-predictions-today">Today's matches</a><a href="/football-predictions-tomorrow">Tomorrow's matches</a><a href="/live">Live scores</a><a href="/results">Results</a><a href="/leagues">All leagues</a>${topLeagues.map((l) => `<a class="lg-link" href="${leaguePath(l)}">${esc(l.name)}</a>`).join("")}</div>
     <div class="foot-col"><h5>Site</h5><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/track-record">Track record</a><a href="/contact">Contact</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
@@ -1361,7 +1361,7 @@ export function livePage(ctx, { live, upcoming = [] }) {
 function joinBlock() {
   return `<section class="block join"><div class="block-head"><h2>Get the daily picks</h2></div>
     <p class="mut" style="margin:0 0 10px">Daily updates, results and match notes come through our Telegram channel.</p>
-    <div class="join-btns"><a class="join-btn tg" href="${CONTACT.channelLink}" rel="noopener">Join Telegram</a><a class="join-btn wa" href="${CONTACT.whatsappLink}" rel="noopener">WhatsApp us</a></div></section>`;
+    <div class="join-btns"><button type="button" class="join-btn tg" data-contact="channel">Join Telegram</button><button type="button" class="join-btn wa" data-contact="whatsapp">WhatsApp us</button></div></section>`;
 }
 
 export function trackRecordPage(ctx, { record }) {
