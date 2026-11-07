@@ -17,7 +17,7 @@ const BOARD_PAGES = Number(process.env.BOARD_PAGES || 3);   // 20 matches per pa
 const BOARD_TTL_MS = Number(process.env.BOARD_TTL_MS || 8 * 60 * 1000);
 const KEEP_STARTED_MS = 10 * 3600 * 1000; // matches stay listed for 10 hours after kick-off
 
-export const status = { lastOk: null, lastError: null, lastStatus: null };
+export const status = { lastOk: null, lastError: null, lastStatus: null, live: null };
 
 export class UpstreamError extends Error {
   constructor(code, body) {
@@ -201,8 +201,11 @@ export async function getLive() {
     const fresh = !d.updated_at || Date.now() - Date.parse(d.updated_at) < 120 * 1000;
     const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter((m) => !m.ts || Date.now() - m.ts < 3.5 * 3600e3) : [];
     hydrateStarted(matches);
+    // Shown on /api/status so we can see WHY a started match has no score (no keys in it).
+    status.live = { at: new Date().toISOString(), source: d.source ?? null, count: matches.length, withScore: matches.filter((m) => m.score && m.score.home != null).length, odds_api_says: d.diag ?? null, ignoredAsOld: !fresh };
     return { ...d, matches };
-  } catch {
+  } catch (err) {
+    status.live = { at: new Date().toISOString(), error: err.message };
     return { matches: [], error: true };
   }
 }
