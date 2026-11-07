@@ -241,6 +241,27 @@
     });
   }
 
+  // Stalled-minute check in the browser. The minute is compared on each poll, so it works even when the server has restarted.
+  const minuteWatch = new Map();
+  function markStalled() {
+    const now = Date.now();
+    document.querySelectorAll('[data-sc][data-state="live"]').forEach((el) => {
+      const mEl = el.querySelector(".w-top, .min");
+      if (!mEl) return;
+      const txt = mEl.textContent.trim();
+      if (!txt || /HT|LIVE/i.test(txt) || txt.includes("no update")) return;
+      let w = minuteWatch.get(el.dataset.sc);
+      if (!w || w.txt !== txt) { w = { txt, at: now }; minuteWatch.set(el.dataset.sc, w); }
+      const mins = Math.floor((now - w.at) / 60000);
+      if (mins >= 4) {
+        const note = document.createElement("span");
+        note.className = "stale-note";
+        note.textContent = ` · no update ${mins}m`;
+        mEl.after(note);
+      }
+    });
+  }
+
   // ---------- live scores ----------
   async function pollLive() {
     if (document.hidden) return;
@@ -256,6 +277,7 @@
       const list = $("#liveList");
       if (list) { list.innerHTML = d.list; syncFavs(); }
       applyScores(d.scores);
+      markStalled();
     } catch { /* keep what is on screen */ }
   }
   setInterval(pollLive, 15 * 1000);
