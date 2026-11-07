@@ -395,12 +395,12 @@ function liveCard(m) {
   const tp = topPick(m);
   const pk = tp ? tp.k : null;
   const r = resOf(m);
-  return `<a class="lcard" href="${matchPath(m)}" ${rowAttrs(m, pk)} data-card>
+  return `<div class="lcard" ${rowAttrs(m, pk)} data-card>
     <span class="lc-top"><span class="lc-lg">${esc(m.league.name)}</span><span class="lc-min"><i class="pulse"></i><span class="w-top">${esc(r.label || "LIVE")}</span></span></span>
     <span class="lc-m">${crest(m.home)}<span class="lc-t">${esc(m.home.name)}</span>${scEl(m, "h")}</span>
     <span class="lc-m">${crest(m.away)}<span class="lc-t">${esc(m.away.name)}</span>${scEl(m, "a")}</span>
     ${tp ? `<span class="lc-foot"><span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}</span>` : ""}
-  </a>`;
+  </div>`;
 }
 
 export function liveList(items) {
