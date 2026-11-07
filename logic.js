@@ -216,8 +216,12 @@ const liveLabel = (x) => (HALFTIME.test(`${x.status || ""} ${x.period || ""}`) ?
 const minuteSeen = new Map();
 const STALE_MIN = 4;
 
+// No match stays "live" longer than this after kick-off, whatever a feed still says (stale data protection).
+const LIVE_MAX_MS = 2.75 * 3600e3;
+
 export function scoreInfo(m, lv, rs, now = Date.now()) {
-  if (lv && !FINISHED.test(String(lv.status || ""))) {
+  const kick = m.ts || (lv && lv.ts) || 0;
+  if (lv && !FINISHED.test(String(lv.status || "")) && !(kick && now - kick > LIVE_MAX_MS)) {
     const [h, a] = scoreOfRaw(lv);
     const base = liveLabel(lv);
     const key = String(lv.id ?? m.id), min = String(lv.minute ?? "");
@@ -233,7 +237,7 @@ export function scoreInfo(m, lv, rs, now = Date.now()) {
     const [h, a] = scoreOfRaw(done);
     if (h !== null && a !== null) return { state: "ft", h, a, label: "FT" };
   }
-  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < 3.5 * 3600e3 ? "Started" : "Pending" };
+  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < LIVE_MAX_MS ? "Started" : "Pending" };
   return { state: "pre", h: null, a: null, label: "" };
 }
 

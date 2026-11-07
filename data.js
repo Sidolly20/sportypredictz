@@ -185,7 +185,7 @@ async function hydrateStarted(list) {
 const nameKey = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(fc|afc|cf|sc|ac|as|fk|sk|cd|ud|club|de|the)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const sameName = (a, b) => { a = nameKey(a); b = nameKey(b); return !!a && !!b && (a === b || a.includes(b) || b.includes(a)); };
 function matchToBoard(m) {
-  if (m.source !== "football-data") return m;
+  if (m.source !== "football-data" && m.source !== "espn") return m;
   const hit = board.matches.find((x) => Math.abs((x.ts || 0) - (m.ts || 0)) < 4 * 3600e3 && sameName(x.home.name, m.home.name) && sameName(x.away.name, m.away.name));
   return hit ? { ...m, id: hit.id, league: hit.league } : m;
 }
@@ -195,11 +195,12 @@ export async function getLive() {
   if (DEMO) return demoLive();
   try {
     const d = await callOddsApi("/v1/live", 12, 60);
-    // A football match cannot still be live 3.5 hours after kick-off (even with extra time and penalties).
+    // A football match is over about 2 hours after kick-off (90 min + half-time + added time). Extra time and
+    // penalties in a cup can stretch it to about 2h 40m. Anything the feed still calls "live" after 2h 45m is old data.
     // If the feed says otherwise, the entry is old and is ignored.
     // odds-api tells us when its live copy was last refreshed. If that copy is older than 2 minutes, it is stale: ignore it.
     const fresh = !d.updated_at || Date.now() - Date.parse(d.updated_at) < 120 * 1000;
-    const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter((m) => !m.ts || Date.now() - m.ts < 3.5 * 3600e3) : [];
+    const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter((m) => !m.ts || Date.now() - m.ts < 2.75 * 3600e3) : [];
     hydrateStarted(matches);
     // Shown on /api/status so we can see WHY a started match has no score (no keys in it).
     status.live = { at: new Date().toISOString(), source: d.source ?? null, count: matches.length, withScore: matches.filter((m) => m.score && m.score.home != null).length, odds_api_says: d.diag ?? null, ignoredAsOld: !fresh };
