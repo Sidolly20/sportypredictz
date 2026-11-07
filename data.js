@@ -216,7 +216,8 @@ export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
     const d = await callOddsApi("/v1/results?limit=50", 60, 900);
-    const results = (d.results || []).map(normMatch);
+    // Backup results (football-data) use their own ids. Map them to our board ids by team names, like live scores.
+    const results = (d.results || []).map(normMatch).map(matchToBoard);
     hydrateStarted(results.filter((x) => x.ts >= Date.now() - 24 * 3600e3));
     saveResults(results);
     return { ...d, results: await withStoredResults(results) };
