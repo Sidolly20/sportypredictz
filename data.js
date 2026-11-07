@@ -179,6 +179,17 @@ async function hydrateStarted(list) {
   if (todo.length) board.matches.sort((a, b) => a.ts - b.ts);
 }
 
+
+// The backup source (football-data) uses its own match ids. Find the same match on our board by team names + kick-off
+// time, and reuse the board's id, so the live score lands on the right row.
+const nameKey = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(fc|afc|cf|sc|ac|as|fk|sk|cd|ud|club|de|the)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+const sameName = (a, b) => { a = nameKey(a); b = nameKey(b); return !!a && !!b && (a === b || a.includes(b) || b.includes(a)); };
+function matchToBoard(m) {
+  if (m.source !== "football-data") return m;
+  const hit = board.matches.find((x) => Math.abs((x.ts || 0) - (m.ts || 0)) < 4 * 3600e3 && sameName(x.home.name, m.home.name) && sameName(x.away.name, m.away.name));
+  return hit ? { ...m, id: hit.id, league: hit.league } : m;
+}
+
 // ---------- live scores ----------
 export async function getLive() {
   if (DEMO) return demoLive();
@@ -188,7 +199,7 @@ export async function getLive() {
     // If the feed says otherwise, the entry is old and is ignored.
     // odds-api tells us when its live copy was last refreshed. If that copy is older than 2 minutes, it is stale: ignore it.
     const fresh = !d.updated_at || Date.now() - Date.parse(d.updated_at) < 120 * 1000;
-    const matches = fresh ? (d.matches || []).map(normMatch).filter((m) => !m.ts || Date.now() - m.ts < 3.5 * 3600e3) : [];
+    const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter((m) => !m.ts || Date.now() - m.ts < 3.5 * 3600e3) : [];
     hydrateStarted(matches);
     return { ...d, matches };
   } catch {
