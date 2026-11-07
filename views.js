@@ -28,7 +28,7 @@ const scEl = (m, side) => `<b class="sc" data-side="${side}">${scNum(m, side)}</
 const pstEl = (m, k) => {
   if (!k) return "";
   const ps = pickState(m, k);
-  return `<span class="pst ${ps || "pend"}">${ps ? PICK_TXT[ps] : resOf(m).state === "wait" ? "Started" : "Pending"}</span>`;
+  return `<span class="pst ${ps || "pend"}">${ps ? PICK_TXT[ps] : resOf(m).state === "wait" ? "Kicked off" : "Pending"}</span>`;
 };
 function whenEl(m, k, withChip = true) {
   const r = resOf(m);
@@ -42,6 +42,7 @@ const rowAttrs = (m, k) => `data-sc="${m.id}" data-state="${resOf(m).state}" dat
 function oddBtn(m, d, extra = "") {
   const odd = num(d.odd);
   const ok = odd && odd > 1;
+  if (!ok) return "";  // no price for this market: show nothing, not an empty box
   return `<button type="button" class="odd${extra}" data-mid="${m.id}" data-k="${esc(d.k)}" data-odd="${ok ? odd.toFixed(2) : ""}" data-pick="${esc(d.pick)}" data-teams="${esc(m.home.name)} v ${esc(m.away.name)}"${d.calc ? ' data-calc="1"' : ""}${ok ? "" : " disabled"} aria-label="${esc(d.pick)} ${ok ? odd.toFixed(2) : "no price"}"><small>${esc(d.label)}</small><b>${d.calc && ok ? "~" : ""}${fmtOdd(odd)}</b></button>`;
 }
 
@@ -707,7 +708,8 @@ function weekHtml(league, recent, upcoming, ctx) {
 // The opening paragraph of a league page. Three angles, picked per league and per day, built from that league's own numbers.
 function leagueLede(league, matches, standings, ctx) {
   const rows = (standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || [];
-  const upcoming = matches.filter((m) => m.ts > Date.now()).sort((a, b) => a.ts - b.ts);
+  // The page already passes only matches still to play, so the opening uses the same list as the "to play" count.
+  const upcoming = matches.slice().sort((a, b) => a.ts - b.ts);
   const n = upcoming.length;
   const leader = rows.find((r) => r.pts !== null && r.p);
   const best = upcoming.map((m) => ({ m, b: topPick(m) })).filter((x) => x.b).sort((a, b) => b.b.pct - a.b.pct)[0];

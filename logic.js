@@ -211,10 +211,22 @@ const scoreOfRaw = (x) => (x && x.score ? [num(x.score.home), num(x.score.away)]
 const liveLabel = (x) => (HALFTIME.test(`${x.status || ""} ${x.period || ""}`) ? "HT" : x.minute !== null && x.minute !== undefined && x.minute !== "" ? `${x.minute}'` : "LIVE");
 
 // state: pre (not started) | live | ft | wait (kick-off time passed, no score yet)
+// When each live match's minute last changed. If the minute has not moved for a while, the feed has likely stalled,
+// so the label says so instead of looking live.
+const minuteSeen = new Map();
+const STALE_MIN = 4;
+
 export function scoreInfo(m, lv, rs, now = Date.now()) {
   if (lv && !FINISHED.test(String(lv.status || ""))) {
     const [h, a] = scoreOfRaw(lv);
-    return { state: "live", h, a, label: liveLabel(lv) };
+    const base = liveLabel(lv);
+    const key = String(lv.id ?? m.id), min = String(lv.minute ?? "");
+    const seen = minuteSeen.get(key);
+    let stale = 0;
+    if (!seen || seen.min !== min) minuteSeen.set(key, { min, at: now });
+    else stale = Math.floor((now - seen.at) / 60000);
+    const label = base !== "HT" && stale >= STALE_MIN ? `${base} · no update ${stale}m` : base;
+    return { state: "live", h, a, label, stale };
   }
   const done = rs || (lv && FINISHED.test(String(lv.status || "")) ? lv : null);
   if (done) {
