@@ -46,3 +46,9 @@ With the same two Supabase variables, the site also keeps a copy of every match 
 - match pages still open for matches the site has seen before,
 - recent results still show.
 Rows older than `STORE_KEEP_DAYS` (default 14) are removed automatically. `/api/status` shows `store` health.
+
+## Search and sharing (added in the 2027 update)
+- Social cards use `/assets/og.png` (1200x630). Replace the file to change the picture shared on WhatsApp, Telegram, X and LinkedIn.
+- App icons live in `/assets` (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`). `/site.webmanifest` lets phones install the site to the home screen.
+- `/llms.txt` gives AI assistants a short, accurate summary of the site. It is only published once live data is on (not in demo mode).
+- Security headers are set in server.js. If a browser console shows a blocked resource after an update, set `CSP_MODE=report` in Render to log violations without blocking, then fix the source and switch back.

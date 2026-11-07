@@ -34,8 +34,32 @@ const VERIFY_FILE = (process.env.GOOGLE_VERIFY_FILE || "").trim().replace(/^\/+/
 app.set("trust proxy", true);
 app.disable("x-powered-by");
 app.use(compression());
+// Security headers. The Content-Security-Policy only allows what this site actually loads:
+// its own scripts and styles, Google Fonts, and images from anywhere over https (team and league crests).
+// Set CSP_MODE=report in Render to test a change without blocking anything (violations are only logged by the browser).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: https:",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'self'"
+].join("; ");
+const CSP_HEADER = process.env.CSP_MODE === "report" ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy";
 app.use((req, res, next) => {
-  res.set({ "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Frame-Options": "SAMEORIGIN" });
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+    "Strict-Transport-Security": "max-age=31536000",
+    [CSP_HEADER]: CSP
+  });
   next();
 });
 
@@ -227,6 +251,54 @@ app.get("/sitemap.xml", async (req, res) => {
   ];
   const day = today;
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr, lm]) => `<url><loc>${origin}${p}</loc><lastmod>${lm || day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);
+});
+
+// ---------- brand assets, install manifest, AI-readable summary ----------
+app.use("/assets", express.static(path.join(__dirname, "assets"), { maxAge: "30d", immutable: false }));
+
+app.get("/site.webmanifest", (req, res) => {
+  res.type("application/manifest+json").set("Cache-Control", "public, max-age=86400").send(JSON.stringify({
+    name: "SportyPredictz",
+    short_name: "SportyPredictz",
+    description: "Football predictions, odds, live scores and results.",
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    background_color: "#06090d",
+    theme_color: "#06090d",
+    icons: [
+      { src: "/assets/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/assets/icon-512.png", sizes: "512x512", type: "image/png" }
+    ]
+  }, null, 2));
+});
+
+app.get("/llms.txt", (req, res, next) => {
+  if (DEMO) return next();
+  const origin = SITE_URL || `${req.protocol}://${req.get("host")}`;
+  res.type("text/plain").set("Cache-Control", "public, max-age=86400").send([
+    "# SportyPredictz",
+    "",
+    "> Free football predictions for today and tomorrow. Each match shows the bookmaker-consensus odds, a model win probability and a pick where the numbers are strong enough. Live scores and final results are published as they happen.",
+    "",
+    "SportyPredictz is an information site. It does not take bets and does not guarantee any result. Odds are a single market consensus price, not a bookmaker-by-bookmaker comparison.",
+    "",
+    "## Main pages",
+    `- [Predictions today](${origin}/football-predictions-today): today's matches with odds and picks`,
+    `- [Predictions tomorrow](${origin}/football-predictions-tomorrow): tomorrow's matches`,
+    `- [Predictions by bet type](${origin}/predictions): 1X2, over/under, both teams to score, double chance and accumulators`,
+    `- [Leagues](${origin}/leagues): every league with fixtures, standings and recent results`,
+    `- [Live scores](${origin}/live): matches in play`,
+    `- [Results](${origin}/results): latest final scores`,
+    "",
+    "## Policies",
+    `- [How predictions work](${origin}/how-it-works)`,
+    `- [Terms of use](${origin}/terms)`,
+    `- [Privacy policy](${origin}/privacy)`,
+    `- [Responsible gambling](${origin}/responsible-gambling)`,
+    "",
+    "Sitemap: " + `${origin}/sitemap.xml`
+  ].join("\n") + "\n");
 });
 
 // ---------- the two browser files ----------

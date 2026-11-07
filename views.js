@@ -398,7 +398,10 @@ export function tickerHtml(live, upcoming) {
 export function layout(ctx, o) {
   const url = ctx.origin + o.path;
   const robots = o.noindex || ctx.demo ? "noindex,follow" : "index,follow,max-image-preview:large";
-  const ld = (o.ld || []).map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("");
+  const siteLd = o.path === "/" ? [
+    { "@context": "https://schema.org", "@type": "Organization", name: SITE_NAME, url: ctx.origin + "/", logo: `${ctx.origin}/assets/icon-512.png` }
+  ] : [];
+  const ld = [...siteLd, ...(o.ld || [])].map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("");
   const active = (p) => (o.path === p || (p !== "/" && o.path.startsWith(p)) ? " on" : "");
   const t = ctx.ticker;
   const topLeagues = (ctx.leagues || []).slice(0, 6);
@@ -414,7 +417,7 @@ ${(ctx.verify || []).join("\n")}
 <link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="${SITE_NAME}">
 <meta property="og:title" content="${esc(o.title)}"><meta property="og:description" content="${esc(o.desc)}"><meta property="og:url" content="${esc(url)}">
-<meta name="twitter:card" content="summary"><meta name="theme-color" content="#06090d">
+<meta property="og:image" content="${esc(ctx.origin)}/assets/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="SportyPredictz football predictions, odds and live scores"><meta property="og:locale" content="en_GB"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${esc(ctx.origin)}/assets/og.png"><meta name="twitter:image:alt" content="SportyPredictz football predictions, odds and live scores"><meta name="theme-color" content="#06090d"><meta name="color-scheme" content="dark light"><link rel="manifest" href="/site.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2306090d'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23b6ff3b' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23b6ff3b'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
