@@ -184,7 +184,11 @@ export async function getLive() {
   if (DEMO) return demoLive();
   try {
     const d = await callOddsApi("/v1/live", 12, 60);
-    const matches = (d.matches || []).map(normMatch);
+    // A football match cannot still be live 3.5 hours after kick-off (even with extra time and penalties).
+    // If the feed says otherwise, the entry is old and is ignored.
+    // odds-api tells us when its live copy was last refreshed. If that copy is older than 2 minutes, it is stale: ignore it.
+    const fresh = !d.updated_at || Date.now() - Date.parse(d.updated_at) < 120 * 1000;
+    const matches = fresh ? (d.matches || []).map(normMatch).filter((m) => !m.ts || Date.now() - m.ts < 3.5 * 3600e3) : [];
     hydrateStarted(matches);
     return { ...d, matches };
   } catch {
