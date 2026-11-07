@@ -32,7 +32,7 @@ const cache = new Map();
 const inflight = new Map();
 const MAX_CACHE = 500;
 
-export async function callOddsApi(path, ttlSeconds) {
+export async function callOddsApi(path, ttlSeconds, maxStaleSeconds = 1800) {
   const hit = cache.get(path);
   if (hit && Date.now() - hit.at < ttlSeconds * 1000) return { ...hit.body, stale: false };
   if (inflight.has(path)) return inflight.get(path);
@@ -54,7 +54,8 @@ export async function callOddsApi(path, ttlSeconds) {
     } catch (err) {
       const code = err instanceof UpstreamError ? err.code : 0;
       status.lastError = err.message;
-      if (hit && (code === 0 || code >= 500)) return { ...hit.body, stale: true };
+      // Old data is reused only for a limited time. Live scores must never be kept long: wrong live is worse than none.
+      if (hit && (code === 0 || code >= 500) && Date.now() - hit.at < maxStaleSeconds * 1000) return { ...hit.body, stale: true };
       throw err;
     } finally {
       inflight.delete(path);
@@ -182,7 +183,7 @@ async function hydrateStarted(list) {
 export async function getLive() {
   if (DEMO) return demoLive();
   try {
-    const d = await callOddsApi("/v1/live", 12);
+    const d = await callOddsApi("/v1/live", 12, 60);
     const matches = (d.matches || []).map(normMatch);
     hydrateStarted(matches);
     return { ...d, matches };
@@ -195,7 +196,7 @@ export async function getLive() {
 export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
-    const d = await callOddsApi("/v1/results?limit=50", 60);
+    const d = await callOddsApi("/v1/results?limit=50", 60, 900);
     const results = (d.results || []).map(normMatch);
     hydrateStarted(results.filter((x) => x.ts >= Date.now() - 24 * 3600e3));
     saveResults(results);
