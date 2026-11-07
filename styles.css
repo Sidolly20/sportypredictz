@@ -911,3 +911,202 @@ details.v4-more[open] > summary::after { content: "–"; }
 .v4-wk-n span { font-weight: 600; font-size: .9rem; }
 .v4-wk-n i { color: var(--mute); font-style: normal; font-weight: 400; }
 .v4-wk-n small { color: var(--mute); font-size: .74rem; }
+
+/* =========================================================
+   2030 layer: wider desktop layout, spotlight picks, probability split bars,
+   and a cleaner league table. Mobile keeps its single column.
+   ========================================================= */
+
+/* Desktop: use the screen. Board on the left, a sticky side column on the right. */
+@media (min-width: 1100px) {
+  .wrap { max-width: 1340px; padding-top: 26px; }
+  .h30 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+  .h30-main { min-width: 0; }
+  .h30-side { position: sticky; top: 84px; display: grid; gap: 16px; }
+  .h30-side .block { margin: 0; }
+  .h30-side .v4-more { margin: 0; }
+}
+
+/* Spotlight: the strongest model picks, as cards with a probability ring. */
+.spots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 6px 0 18px; }
+@media (min-width: 900px) { .spots { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.spot {
+  position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  padding: 14px; border-radius: 18px; text-decoration: none; color: var(--text);
+  background: radial-gradient(120% 90% at 100% 0%, rgba(182,255,59,.10), transparent 60%), var(--panel);
+  border: 1px solid var(--line); transition: transform .18s ease, border-color .18s ease;
+}
+.spot:hover { transform: translateY(-2px); border-color: rgba(182,255,59,.45); }
+.spot-lg { font: 700 .66rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot-m { font-weight: 800; font-size: .95rem; line-height: 1.25; }
+.spot-m i { font-style: normal; color: var(--mute); font-weight: 600; padding: 0 2px; }
+.spot-row { display: flex; align-items: center; gap: 12px; }
+.ring {
+  --p: 0; flex: 0 0 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; position: relative;
+  background: conic-gradient(var(--acid) calc(var(--p) * 1%), rgba(255,255,255,.08) 0);
+}
+.ring::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--panel); }
+.ring b, .ring small { position: relative; font: 800 1rem var(--display); }
+.ring small { font-size: .62rem; margin-left: -2px; align-self: flex-start; margin-top: 16px; color: var(--mute); }
+.spot-pick { display: flex; flex-direction: column; min-width: 0; }
+.spot-pick small { font: 700 .62rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.spot-pick b { font-weight: 800; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot-pick em { font-style: normal; font: 700 .8rem var(--mono); color: var(--acid); }
+
+/* Probability split: the model's home / draw / away shares as one bar. */
+.split { display: flex; gap: 2px; height: 6px; border-radius: 6px; overflow: hidden; flex: 0 0 120px; background: rgba(255,255,255,.06); }
+.split i { display: block; height: 100%; min-width: 2px; }
+.sp-h { background: var(--acid); }
+.sp-d { background: #7d8ea3; }
+.sp-a { background: var(--hot); }
+
+/* Match rows: a little more air on desktop. */
+@media (min-width: 1100px) {
+  .mrow.pk { grid-template-columns: 62px minmax(0, 1fr) 250px auto 34px; padding: 12px 14px; }
+  .mrow.pk .split { flex-basis: 150px; }
+}
+
+/* League tables: clearer header, zebra rows, zone colours for the top and bottom. */
+.stand th { position: sticky; top: 0; background: var(--panel); z-index: 1; padding: 10px 6px; }
+.stand tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+.stand tbody tr:hover td { background: rgba(182,255,59,.05); }
+.stand td:first-child { font-weight: 800; }
+.stand tr.zone-top td:first-child { box-shadow: inset 3px 0 0 var(--acid); }
+.stand tr.zone-down td:first-child { box-shadow: inset 3px 0 0 var(--hot); }
+.stand td.l, .stand th.l { text-align: left; }
+/* Desktop rows: the pick line sits on top and the probability bar gets its own line under it, so nothing overlaps. */
+@media (min-width: 1100px) {
+  .mrow.pk > .pkrow { flex-wrap: wrap; row-gap: 6px; }
+  .mrow.pk .split { flex: 0 0 100%; height: 5px; }
+}
+.ring b { font-size: .92rem; letter-spacing: -.02em; }
+.ring small { display: none; }
+
+/* Phone rows: show the full pick name and keep the probability bar on its own line. */
+@media (max-width: 760px) {
+  .mrow.pk > .pkrow { flex-wrap: wrap; row-gap: 6px; }
+  .mrow.pk .pkline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+  .mrow.pk .pkline b { white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 auto; }
+  .mrow.pk .split { flex: 0 0 100%; height: 5px; order: 3; }
+  .spot-pick b { white-space: normal; }
+  .spot-m { font-size: .9rem; }
+}
+
+/* Fixture tags sit on their own line under the team names, so they never cover the kick-off time. */
+.v4-fxc .v4-tag { position: static; display: inline-block; margin: 0 0 8px; }
+/* League tables: the top four get the lime marker, whatever the league. */
+.stand tbody tr:nth-child(-n+4) td:first-child { box-shadow: inset 3px 0 0 var(--acid); }
+
+/* Match page, desktop: win probability on the left, every price on the right. */
+@media (min-width: 1100px) {
+  .m30 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 20px; align-items: start; }
+  .m30 .block { margin: 0; }
+  .m30-a .block h2, .m30-b .block h2 { margin-bottom: 12px; }
+}
+
+/* Model vs market card on the match page */
+.mvm .mvm-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.mvm .mvm-row:first-of-type { border-top: 0; }
+.mvm-n { font-weight: 700; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mvm-bars { display: grid; gap: 4px; }
+.mvm-bars i { display: block; height: 7px; border-radius: 6px; }
+.mv-m { background: var(--acid); }
+.mv-k { background: rgba(255,255,255,.22); }
+.mvm-v { font: 800 .95rem var(--display); white-space: nowrap; text-align: right; }
+.mvm-v small { font: 600 .7rem var(--mono); color: var(--mute); }
+.mvm-key { margin: 10px 0 0; font: 600 .7rem var(--mono); color: var(--mute); letter-spacing: .04em; }
+.mvm-key i { display: inline-block; width: 12px; height: 6px; border-radius: 4px; margin: 0 4px 0 8px; vertical-align: middle; }
+.mvm-key i:first-child { margin-left: 0; }
+.mvm{margin-bottom:14px}.mvm h2{margin:0 0 6px}
+
+/* Join block */
+.join-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.join-btn { flex: 1 1 140px; text-align: center; padding: 11px 14px; border-radius: 12px; font-weight: 800; text-decoration: none; font-size: .9rem; }
+.join-btn.tg { background: var(--sky); color: #04131c; }
+.join-btn.wa { background: var(--acid); color: #0a1204; }
+.foot-join { font-size: .84rem; margin-top: 10px; }
+.foot-join a { color: var(--acid); text-decoration: none; }
+
+/* Track record rows */
+.tr-list { display: grid; gap: 0; }
+.tr-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 200px) 64px; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.tr-d { font: 600 .74rem var(--mono); color: var(--mute); }
+.tr-m b { display: block; font-size: .9rem; }
+.tr-m small { color: var(--mute); font-size: .74rem; }
+.tr-p { font-size: .84rem; min-width: 0; }
+.tr-p small { display: block; color: var(--mute); font: 600 .62rem var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.tr-p em { font-style: normal; color: var(--acid); font-family: var(--mono); }
+.tr-s { font: 800 .72rem var(--mono); text-align: center; padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line2); }
+.tr-s.won { color: var(--acid); border-color: rgba(182,255,59,.5); }
+.tr-s.lost { color: var(--hot); border-color: rgba(255,77,109,.5); }
+@media (max-width: 640px) { .tr-row { grid-template-columns: 56px minmax(0, 1fr) 58px; } .tr-p { display: none; } }
+
+/* =========================================================
+   League board: a matchday layout with a league-coloured identity bar.
+   ========================================================= */
+.lgb { --lh: 150; --lc: hsl(var(--lh) 85% 62%); --lc-soft: hsla(var(--lh), 85%, 62%, .14); display: grid; gap: 18px; margin-top: 10px; }
+.lgb-hero {
+  position: relative; overflow: hidden; border-radius: 20px; padding: 18px 20px; border: 1px solid var(--line);
+  background: linear-gradient(120deg, var(--lc-soft), transparent 60%), var(--panel);
+  display: grid; gap: 14px;
+}
+.lgb-hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--lc); }
+.lgb-id { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.lgb-id > div { min-width: 0; }
+.lgb-id small { display: block; font: 700 .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--lc); }
+.lgb-id h1 { margin: 2px 0 4px; font: 700 clamp(1.25rem, 3vw, 1.7rem) var(--body); letter-spacing: -.02em; }
+.lgb-id p { margin: 0; color: var(--mute); font-size: .9rem; }
+.lgb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.lgb-stats > div { background: var(--ink2); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; min-width: 0; }
+.lgb-stats b { display: block; font: 800 1.25rem var(--mono); font-variant-numeric: tabular-nums; }
+.lgb-stats span { display: block; color: var(--mute); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgb-strip { display: grid; gap: 8px; }
+.lgb-strip h2, .lgb-section h2, .lgb-table h2, .lgb-others h2 { margin: 0 0 10px; font: 700 .8rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.lgb-best { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.lgb-chip {
+  flex: 0 0 auto; display: grid; gap: 2px; min-width: 190px; padding: 10px 12px; border-radius: 14px; text-decoration: none; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--lc);
+}
+.lgb-chip b { font: 800 1.1rem var(--mono); color: var(--lc); }
+.lgb-chip span { font-size: .84rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgb-chip em { font-style: normal; color: var(--mute); font-size: .76rem; }
+.lgb-grid { display: grid; gap: 18px; min-width: 0; }
+.lgb-main, .lgb-side { min-width: 0; display: grid; gap: 18px; align-content: start; }
+.lgb-day { margin-bottom: 14px; }
+.lgb-day h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 8px; font-size: .92rem; font-weight: 700; }
+.lgb-day h3 small { color: var(--mute); font: 600 .72rem var(--mono); }
+.lgb-list { display: grid; border-left: 2px solid var(--line); margin-left: 6px; padding-left: 14px; gap: 8px; position: relative; }
+.lgb-fx {
+  position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1.1fr) 18px; gap: 12px; align-items: center;
+  padding: 11px 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); color: var(--text); text-decoration: none;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.lgb-fx::before { content: ""; position: absolute; left: -21px; top: 50%; width: 9px; height: 9px; margin-top: -4px; border-radius: 50%; background: var(--lc); }
+.lgb-fx:hover { border-color: var(--lc); transform: translateX(2px); }
+.lgb-time { font: 700 .86rem var(--mono); color: var(--mute); font-variant-numeric: tabular-nums; }
+.lgb-teams { display: grid; gap: 4px; min-width: 0; }
+.lgb-teams > span { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: .92rem; min-width: 0; }
+.lgb-teams > span:last-child { color: var(--mute); font-weight: 600; }
+.lgb-read { display: grid; gap: 6px; min-width: 0; }
+.lgb-pick { font-size: .8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgb-pick small { color: var(--mute); margin-right: 6px; font: 600 .62rem var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.lgb-pick b { color: var(--lc); margin-left: 4px; font-family: var(--mono); }
+.lgb-pick.none { color: var(--mute); }
+.lgb-go { color: var(--mute); font-size: 1.2rem; text-align: center; }
+.lgb-table { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+.lgb-table .tablewrap { border: 0; background: none; margin: 0; }
+.lgb-table .tblcap { display: none; }
+.lgb-others { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+.lgb .stand th { position: sticky; top: 0; }
+.lgb .stand td:first-child { color: var(--lc); }
+@media (min-width: 1100px) {
+  .lgb-grid { grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+  .lgb-side { position: sticky; top: 84px; }
+  .lgb-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+}
+@media (max-width: 640px) {
+  .lgb-fx { grid-template-columns: 46px minmax(0, 1fr) 14px; }
+  .lgb-read { grid-column: 2 / 3; }
+  .lgb-go { display: none; }
+  .lgb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

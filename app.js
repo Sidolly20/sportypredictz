@@ -267,3 +267,17 @@
   renderFavPage();
   $("#slip").hidden = false;
 })();
+
+// Countdown to the next kick-off on league pages. Works without any server calls.
+(function () {
+  const els = Array.from(document.querySelectorAll("[data-ko]"));
+  if (!els.length) return;
+  const fmt = (ms) => {
+    if (ms <= 0) return "kicking off";
+    const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mi = m % 60;
+    return d ? `in ${d}d ${h}h` : h ? `in ${h}h ${mi}m` : `in ${mi}m`;
+  };
+  const tick = () => els.forEach((el) => { el.textContent = `${fmt(Number(el.dataset.ko) - Date.now())}`; });
+  tick();
+  setInterval(tick, 30000);
+})();

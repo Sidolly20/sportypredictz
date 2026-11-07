@@ -378,7 +378,31 @@ export const HOME = {
 };
 
 // ---------- static pages ----------
+// Contact details. Change them here only.
+export const CONTACT = {
+  whatsapp: "+234 915 469 7507",
+  whatsappLink: "https://wa.me/2349154697507",
+  telegramPersonal: "@Aiam_B",
+  telegramPersonalLink: "https://t.me/Aiam_B",
+  channel: "t.me/sportypredictz1",
+  channelLink: "https://t.me/sportypredictz1",
+  email: "allotips8@gmail.com",
+  emailLink: "mailto:allotips8@gmail.com"
+};
+
 export const PAGES = {
+  contact: {
+    title: "Contact SportyPredictz",
+    desc: "Contact SportyPredictz on WhatsApp, Telegram or email. Questions about the predictions, the site or a bug report are welcome.",
+    h1: "Contact us",
+    body: [
+      `<p>Questions about a prediction, a page that looks wrong, or a bug you have spotted? Get in touch using whichever channel suits you best.</p>`,
+      `<h2>WhatsApp</h2><p>Message us on WhatsApp at <a href="${CONTACT.whatsappLink}" rel="noopener">${CONTACT.whatsapp}</a>.</p>`,
+      `<h2>Telegram</h2><p>Direct messages: <a href="${CONTACT.telegramPersonalLink}" rel="noopener">${CONTACT.telegramPersonal}</a>.</p><p>Our public channel, with daily updates: <a href="${CONTACT.channelLink}" rel="noopener">${CONTACT.channel}</a>.</p>`,
+      `<h2>Email</h2><p>Write to <a href="${CONTACT.emailLink}">${CONTACT.email}</a>. Please include the page address if your message is about a specific match or league.</p>`,
+      `<h2>What we do with your message</h2><p>We only use the details you send to reply to you. We do not sell them or add them to a mailing list without asking first. We are not able to give personal betting advice; the predictions on this site are the same for everyone.</p>`
+    ]
+  },
   about: {
     title: "About SportyPredictz",
     desc: "SportyPredictz is a free football predictions site: market odds, model probabilities, live scores and league tables in one place.",
@@ -458,7 +482,7 @@ export const PAGES = {
       "<h2>Fonts</h2>",
       "<p>The site loads fonts from Google Fonts, which may receive your IP address when it serves them.</p>",
       "<h2>Changes</h2>",
-      "<p>If we add analytics or advertising later, we will update this page before we do.</p>"
+      "<p>We may use GoatCounter to count page visits. It does not use cookies or build personal profiles, and it only runs when the site owner has turned it on. We do not show advertising.</p>"
     ].join("")
   }
 };
@@ -466,56 +490,95 @@ export const PAGES = {
 // ---------- match analysis (written from the numbers, varied so pages do not read the same) ----------
 const pickBy = (arr, id) => arr[Math.abs(Number(id) || 0) % arr.length];
 
+// Each match gets its own mix of angles: the same facts, told in different orders and with different words,
+// chosen by match id, so no two match pages read alike and the wording never repeats across the site.
 export function analysis(m) {
   const p = m.prediction, o = m.odds || {};
-  const h = m.home.name, a = m.away.name;
+  const h = m.home.name, a = m.away.name, id = m.id;
   const when = `${longDate(m.ts)} at ${clock(m.ts)}`;
   const lg = m.league.name;
   const out = [];
 
+  // 1) Set the scene
   out.push(pickBy([
-    `${h} take on ${a} in ${lg} on ${when}.`,
-    `${lg} action: ${h} host ${a} on ${when}.`,
-    `${h} v ${a} is on the ${lg} schedule for ${when}.`
-  ], m.id) + (o.home_win ? ` The market has ${h} at ${fmtOdd(o.home_win)}, the draw at ${fmtOdd(o.draw)} and ${a} at ${fmtOdd(o.away_win)}.` : ""));
+    `${h} and ${a} meet in ${lg} on ${when}. ${o.home_win ? `Bookmakers price ${h} at ${fmtOdd(o.home_win)}, the draw at ${fmtOdd(o.draw)} and ${a} at ${fmtOdd(o.away_win)}.` : "Bookmaker prices for this game are still being set."}`,
+    `Kick-off is ${when} in ${lg}. ${o.home_win ? `On the prices, ${h} are ${fmtOdd(o.home_win)} at home and ${a} are ${fmtOdd(o.away_win)} away, with the draw at ${fmtOdd(o.draw)}.` : "The prices have not settled yet, so check back before you decide."}`,
+    `${lg}, ${when}: ${h} host ${a}. ${o.home_win ? `The market's single price for each result is ${fmtOdd(o.home_win)} / ${fmtOdd(o.draw)} / ${fmtOdd(o.away_win)} (home / draw / away).` : "Odds for this match have not been published yet."}`
+  ], id));
 
   if (!p) {
-    out.push("There is no model prediction for this match yet. Check back closer to kick-off.");
+    out.push("There is no model read for this match yet. It appears once the numbers are in, usually a few hours before kick-off.");
+    out.push("This is a model estimate and not a promise. Check team news before kick-off.");
     return out;
   }
 
+  // 2) What the model thinks
   const b = bestSide(m);
   const hp = num(p.home_win_pct), dp = num(p.draw_pct), ap = num(p.away_win_pct);
   if (b && hp !== null) {
-    const strong = b.pct >= 62, lean = b.pct >= 48;
-    const lead = b.k === "X"
-      ? `The model sees this as tight: a draw is its single most likely result at ${Math.round(dp)}%.`
-      : strong
-        ? `The model is fairly confident here. It gives ${b.k === "1" ? h : a} a ${Math.round(b.pct)}% chance of winning.`
-        : lean
-          ? `The model leans towards ${b.k === "1" ? h : a} at ${Math.round(b.pct)}%, but it is far from decided.`
-          : `The model cannot split these two. ${h} are at ${Math.round(hp)}%, ${a} at ${Math.round(ap)}% and the draw at ${Math.round(dp)}%.`;
-    let tail = "";
+    const who = b.k === "1" ? h : a;
+    const gap = Math.abs(hp - ap);
+    const read = b.k === "X"
+      ? pickBy([
+          `The model's most likely single result is a draw, at ${Math.round(dp)}%. Neither side pulls clearly ahead.`,
+          `A draw is what the numbers point to most, at ${Math.round(dp)}%. This one is about how it is played, not who is better on paper.`
+        ], id + 1)
+      : b.pct >= 62
+        ? pickBy([
+            `${who} are the clear favourite on our numbers, at ${Math.round(b.pct)}% to win.`,
+            `On the model, ${who} have a ${Math.round(b.pct)}% chance, which puts them well ahead of the other side.`
+          ], id + 1)
+        : b.pct >= 48
+          ? pickBy([
+              `${who} lean on our numbers at ${Math.round(b.pct)}%, but the match is still open.`,
+              `The model gives ${who} a ${Math.round(b.pct)}% shot, a real edge without being a lock.`
+            ], id + 1)
+          : pickBy([
+              `The model cannot separate these sides: ${h} ${Math.round(hp)}%, draw ${Math.round(dp)}%, ${a} ${Math.round(ap)}%.`,
+              `Nothing stands out. Our split is ${Math.round(hp)} / ${Math.round(dp)} / ${Math.round(ap)} for home, draw and away.`
+            ], id + 1);
+    out.push(read + (gap < 8 && b.k !== "X" ? " The gap between the two sides is small, so small changes in team news matter." : ""));
+
+    // 3) Price against model
     const e = b.odd ? edgeOf(b.pct, b.odd) : null;
     if (e !== null) {
-      tail = e >= 0.06
-        ? ` At ${fmtOdd(b.odd)} that price looks a little generous compared with the model, a model edge of ${e > 0 ? "+" : ""}${(e * 100).toFixed(1)}%.`
+      out.push(e >= 0.06
+        ? pickBy([
+            `At ${fmtOdd(b.odd)} the price looks generous next to the model, an edge of +${(e * 100).toFixed(1)}%.`,
+            `The market is offering ${fmtOdd(b.odd)} on ${b.k === "X" ? "the draw" : b.k === "1" ? h : a}, which the model rates higher. That gap is worth noting: +${(e * 100).toFixed(1)}%.`
+          ], id + 2)
         : e <= -0.08
-          ? ` The market price of ${fmtOdd(b.odd)} is shorter than the model suggests, so there is little value in it.`
-          : ` The market price of ${fmtOdd(b.odd)} is close to where the model has it.`;
+          ? pickBy([
+              `The market is shorter than the model on ${b.k === "X" ? "the draw" : b.k === "1" ? h : a}: ${fmtOdd(b.odd)} is not much of a price for the chance involved.`,
+              `At ${fmtOdd(b.odd)} the bookmakers already agree with the model, so there is little left in the price.`
+            ], id + 2)
+          : pickBy([
+              `The price of ${fmtOdd(b.odd)} sits close to where the model has it, so the market and our numbers agree.`,
+              `Market and model are close here: ${fmtOdd(b.odd)} against our ${Math.round(b.pct)}%.`
+            ], id + 2));
     }
-    out.push(lead + tail);
   }
 
+  // 4) Shape of the game
   const bits = [];
   if (num(p.over_25_pct) !== null) {
     const ov = p.over_25_pct;
-    bits.push(ov >= 58 ? `Goals look likely: over 2.5 is rated at ${Math.round(ov)}%` : ov <= 42 ? `This could be a quiet one: over 2.5 goals is only ${Math.round(ov)}%` : `Over 2.5 goals sits near the middle at ${Math.round(ov)}%`);
+    bits.push(ov >= 58 ? `goals are likely (over 2.5 at ${Math.round(ov)}%)` : ov <= 42 ? `a low-scoring game is the expectation (over 2.5 only ${Math.round(ov)}%)` : `over 2.5 sits in the middle at ${Math.round(ov)}%`);
   }
-  if (num(p.btts_yes_pct) !== null) bits.push(`both teams to score is at ${Math.round(p.btts_yes_pct)}%`);
-  if (p.most_likely_score) bits.push(`the most likely scoreline is ${p.most_likely_score}`);
-  if (p.expected_goals && num(p.expected_goals.home) !== null) bits.push(`expected goals come out at ${Number(p.expected_goals.home).toFixed(1)} for ${h} and ${Number(p.expected_goals.away).toFixed(1)} for ${a}`);
-  if (bits.length) out.push(bits.join(", ").replace(/^./, (c) => c.toUpperCase()) + ".");
+  if (num(p.btts_yes_pct) !== null) bits.push(`both teams scoring is ${Math.round(p.btts_yes_pct)}%`);
+  if (p.most_likely_score) bits.push(`the single most likely scoreline is ${p.most_likely_score}`);
+  if (p.expected_goals && num(p.expected_goals.home) !== null) bits.push(`expected goals are ${Number(p.expected_goals.home).toFixed(1)} for ${h} and ${Number(p.expected_goals.away).toFixed(1)} for ${a}`);
+  if (bits.length) out.push(pickBy([
+    `On the shape of the game: ${bits.join(", ")}.`,
+    `How it may play out: ${bits.join("; ")}.`
+  ], id + 3).replace(/^On the shape of the game: (.)/, (m0, c) => `On the shape of the game: ${c}`));
+
+  // 5) What would change the read
+  out.push(pickBy([
+    "The things to watch are late team news, rotation and any move in the odds. A sharp move in the favourite's price is usually the first sign that the numbers have changed.",
+    "Before you decide, check the team news and the lineups. If the favourite's price drifts out sharply, the model may be ahead of the market, or it may have missed something.",
+    "Model numbers are set before the final lineups. Injuries and rest decisions can shift the picture, so read the odds again close to kick-off."
+  ], id + 4));
 
   out.push("This is a model estimate and not a promise. Check team news before kick-off.");
   return out;

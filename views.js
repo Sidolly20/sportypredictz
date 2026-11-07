@@ -4,7 +4,10 @@ import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
   matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick
 } from "./logic.js";
-import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
+import { CATEGORIES, CAT_BY_SLUG, CONTACT, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
+
+// Optional analytics (GoatCounter: no cookies, counts visits only). Off unless GOATCOUNTER_CODE is set in Render.
+const GC_CODE = /^[a-z0-9-]{2,40}$/i.test(process.env.GOATCOUNTER_CODE || "") ? process.env.GOATCOUNTER_CODE : "";
 
 // ---------- small pieces ----------
 const crest = (t) => {
@@ -44,6 +47,27 @@ function oddBtn(m, d, extra = "") {
 
 const starBtn = (m) => `<button type="button" class="star" data-fav data-mid="${m.id}" data-home="${esc(m.home.name)}" data-away="${esc(m.away.name)}" data-league="${esc(m.league.name)}" data-ts="${m.ts}" data-path="${esc(matchPath(m))}" aria-label="Save ${esc(m.home.name)} v ${esc(m.away.name)}" aria-pressed="false">☆</button>`;
 
+// The model's split between home, draw and away as one segmented bar (the shares add up to 100).
+function splitBar(mk) {
+  const sp = (mk["1x2"] || []).filter((d) => ["1", "X", "2"].includes(d.k) && num(d.pct) !== null && d.pct > 0);
+  if (!sp.length) return "";
+  const tot = sp.reduce((t, d) => t + Number(d.pct), 0) || 1;
+  const cls = { "1": "h", X: "d", "2": "a" };
+  return `<span class="split" aria-hidden="true" title="Model: ${sp.map((d) => `${d.k === "X" ? "Draw" : d.k === "1" ? "Home" : "Away"} ${Math.round(d.pct)}%`).join(" · ")}">${sp.map((d) => `<i class="sp-${cls[d.k]}" style="width:${((Number(d.pct) / tot) * 100).toFixed(1)}%"></i>`).join("")}</span>`;
+}
+
+// Spotlight card: the strongest model picks of the day, shown above the board.
+function spotCard(m) {
+  const tp = topPick(m);
+  const pct = Math.round(tp.pct);
+  return `<a class="spot" href="${matchPath(m)}" style="--p:${pct}">
+    <span class="spot-lg">${esc(m.league.name)} · ${clock(m.ts)}</span>
+    <span class="spot-m">${esc(m.home.name)} <i>v</i> ${esc(m.away.name)}</span>
+    <span class="spot-row"><span class="ring" aria-hidden="true"><b>${pct}%</b></span>
+      <span class="spot-pick"><small>Model pick</small><b>${esc(tp.label)}</b>${tp.odd ? `<em>@${fmtOdd(tp.odd)}</em>` : ""}</span></span>
+  </a>`;
+}
+
 export function matchRow(m) {
   const mk = marketsOf(m);
   const tp = topPick(m);
@@ -54,7 +78,7 @@ export function matchRow(m) {
     `<div class="mk mk-${id}" style="--n:${list.length}">${list.map((d) => oddBtn(m, d, pk && d.k === pk ? ` mp${hl}` : "")).join("")}</div>`).join("");
   const pd = pk ? Object.values(mk).flat().find((d) => d.k === pk) : null;
   const line = tp
-    ? `<span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}<span class="mbar"><i style="width:${Math.min(100, Math.round(tp.pct))}%"></i></span>`
+    ? `<span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span>${pstEl(m, pk)}${splitBar(mk)}`
     : `<span class="pkline none"><small>Pick</small><b>No clear pick</b></span>`;
   return `<article class="mrow pk" ${rowAttrs(m, pk)} data-search="${esc(`${m.home.name} ${m.away.name} ${m.league.name}`.toLowerCase())}">
     ${whenEl(m, pk, false)}
@@ -444,10 +468,10 @@ ${o.body}
 </main>
 <footer class="foot">
   <div class="foot-grid">
-    <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p></div>
+    <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p><p class="foot-join"><a href="${CONTACT.channelLink}" rel="noopener">Telegram channel</a> · <a href="${CONTACT.whatsappLink}" rel="noopener">WhatsApp</a> · <a href="${CONTACT.emailLink}">Email</a></p></div>
     <div class="foot-col"><h5>Predictions</h5>${CATEGORIES.slice(0, 6).map((c) => `<a href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}<a href="/predictions">See all tips</a></div>
     <div class="foot-col"><h5>Football</h5><a href="/football-predictions-today">Today's matches</a><a href="/football-predictions-tomorrow">Tomorrow's matches</a><a href="/live">Live scores</a><a href="/results">Results</a><a href="/leagues">All leagues</a>${topLeagues.map((l) => `<a class="lg-link" href="${leaguePath(l)}">${esc(l.name)}</a>`).join("")}</div>
-    <div class="foot-col"><h5>Site</h5><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
+    <div class="foot-col"><h5>Site</h5><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/track-record">Track record</a><a href="/contact">Contact</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
   </div>
   <div class="foot-bar"><p><b class="age-pill">18+</b> ${SITE_NAME} is an information site, not a bookmaker, and takes no bets. Odds can change at any time. Predictions are estimates, not guarantees. Bet only where it is legal and only what you can afford to lose.</p><span class="mono">&copy; ${new Date().getFullYear()} ${SITE_NAME}</span></div>
 </footer>
@@ -457,6 +481,7 @@ ${o.body}
 </aside>
 <button type="button" class="slip-fab" id="slipFab" hidden><span>Pick slip</span><b id="fabCount">0</b><span class="mono" id="fabOdds">0.00</span></button>
 <script src="/app.js?v=${ctx.v}" defer></script>
+${GC_CODE ? `<script data-goatcounter="https://${GC_CODE}.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>` : ""}
 </body>
 </html>`;
 }
@@ -530,15 +555,25 @@ export function homePage(ctx, { matches, live, updatedAt }) {
     return `<div class="v4-group" id="lg-${esc(g.league.id ?? "x")}"><h3>${lgIcon(g.league)}${esc(g.league.name)} <span>${g.matches.length}</span></h3>${rows}</div>`;
   }).join("");
 
+  const spots = pool.filter((m) => topPick(m)).sort((a, b) => topPick(b).pct - topPick(a).pct).slice(0, 4);
+  const spotlight = spots.length ? `<section class="spots" aria-label="Strongest model picks today">${spots.map(spotCard).join("")}</section>` : "";
   const body = `
   ${pageHead(`Football predictions ${todays.length ? "today" : "this week"}`, `${esc(longDate(Date.now()))} · ${pool.length} matches${liveNow ? ` · ${liveNow} live now` : ""}`)}
-  ${picker}
-  ${pool.length ? `<section class="block">${list}</section>` : `<div class="empty">No matches loaded yet. This page fills itself in when they appear.</div>`}
-  ${pool.length > VIEW_ALL_AFTER && shown <= VIEW_ALL_AFTER ? viewAll : ""}
-  ${ctx.record && ctx.record.total ? `<section class="block"><div class="block-head"><h2>Our track record</h2><a href="/results">All results →</a></div>${recStrip(ctx.record)}</section>` : ""}
-  <details class="v4-more"><summary>How we make predictions<span>Tap to read</span></summary>
-    <div class="v4-prose">${HOME.how.map((p) => `<p>${esc(p)}</p>`).join("")}<p><a href="/how-it-works">Read how to read the numbers →</a></p>${HOME.faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join("")}</div>
-  </details>`;
+  <div class="h30">
+    <div class="h30-main">
+      ${spotlight}
+      ${picker}
+      ${pool.length ? `<section class="block">${list}</section>` : `<div class="empty">No matches loaded yet. This page fills itself in when they appear.</div>`}
+      ${pool.length > VIEW_ALL_AFTER && shown <= VIEW_ALL_AFTER ? viewAll : ""}
+    </div>
+    <aside class="h30-side">
+      ${joinBlock()}
+      ${ctx.record && ctx.record.total ? `<section class="block"><div class="block-head"><h2>Our track record</h2><a href="/track-record">Full record →</a></div>${recStrip(ctx.record)}</section>` : ""}
+      <details class="v4-more"><summary>How we make predictions<span>Tap to read</span></summary>
+        <div class="v4-prose">${HOME.how.map((p) => `<p>${esc(p)}</p>`).join("")}<p><a href="/how-it-works">Read how to read the numbers →</a></p>${HOME.faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join("")}</div>
+      </details>
+    </aside>
+  </div>`;
   return {
     title: HOME.title, desc: HOME.desc, path: "/", body,
     ld: [
@@ -564,7 +599,7 @@ export function dayPage(ctx, { matches, days, key }) {
   return {
     title: `Football Predictions ${key === today ? "Today" : key === addDays(today, 1) ? "Tomorrow" : nice}: Odds and Tips | ${SITE_NAME}`,
     desc: `Football predictions for ${nice}: ${list.length} matches with odds, win probabilities, over/under goals and both teams to score picks.`,
-    path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], [`Predictions ${label}`, path]])]
+    path, body, noindex: key < todayKey(), ld: [crumbLd(ctx.origin, [["Home", "/"], [`Predictions ${label}`, path]])]
   };
 }
 
@@ -633,7 +668,7 @@ function standingsTable(st) {
   if (!st || !st.groups.length) return "";
   return st.groups.map((g) => `<div class="tablewrap">${g.name ? `<div class="tblcap">${esc(g.name)}</div>` : ""}<table class="stand"><thead><tr><th>#</th><th class="l">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th class="hide-s">GF</th><th class="hide-s">GA</th><th>GD</th><th>Pts</th></tr></thead><tbody>${g.rows.map((r) => {
     const fb = esc(initials(r.team));
-    return `<tr><td>${r.pos}</td><td class="l"><span class="team">${r.crest ? `<span class="crest"><img src="${esc(r.crest)}" alt="" loading="lazy" width="20" height="20" data-fb="${fb}"></span>` : `<span class="crest">${fb}</span>`}<span class="nm">${esc(r.team)}</span></span></td><td>${r.p ?? "–"}</td><td>${r.w ?? "–"}</td><td>${r.d ?? "–"}</td><td>${r.l ?? "–"}</td><td class="hide-s">${r.gf ?? "–"}</td><td class="hide-s">${r.ga ?? "–"}</td><td>${r.gd ?? "–"}</td><td class="pts">${r.pts ?? "–"}</td></tr>`;
+    return `<tr><td>${r.pos ?? "–"}</td><td class="l"><span class="team">${r.crest ? `<span class="crest"><img src="${esc(r.crest)}" alt="" loading="lazy" width="20" height="20" data-fb="${fb}"></span>` : `<span class="crest">${fb}</span>`}<span class="nm">${esc(r.team)}</span></span></td><td>${r.p ?? "–"}</td><td>${r.w ?? "–"}</td><td>${r.d ?? "–"}</td><td>${r.l ?? "–"}</td><td class="hide-s">${r.gf ?? "–"}</td><td class="hide-s">${r.ga ?? "–"}</td><td>${r.gd ?? "–"}</td><td class="pts">${r.pts ?? "–"}</td></tr>`;
   }).join("")}</tbody></table></div>`).join("");
 }
 
@@ -669,24 +704,95 @@ function weekHtml(league, recent, upcoming, ctx) {
   return `<section class="block v4-week"><div class="v4-mhead"><h2>The week in ${esc(league.name)}</h2></div>${res}${facts}${next}</section>`;
 }
 
+// The opening paragraph of a league page. Three angles, picked per league and per day, built from that league's own numbers.
+function leagueLede(league, matches, standings, ctx) {
+  const rows = (standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || [];
+  const upcoming = matches.filter((m) => m.ts > Date.now()).sort((a, b) => a.ts - b.ts);
+  const n = upcoming.length;
+  const leader = rows.find((r) => r.pts !== null && r.p);
+  const best = upcoming.map((m) => ({ m, b: topPick(m) })).filter((x) => x.b).sort((a, b) => b.b.pct - a.b.pct)[0];
+  const seed = `${league.id}|${todayKey()}`;
+  const i = seed.split("").reduce((t, c) => t + c.charCodeAt(0), 0) % 3;
+  const count = n ? `${n} ${n === 1 ? "match" : "matches"}` : "no matches yet";
+  const angles = [
+    `${esc(league.name)} has ${count} on our board right now.${best ? ` The strongest model pick is ${esc(best.b.label)} (${Math.round(best.b.pct)}%) in ${esc(best.m.home.name)} v ${esc(best.m.away.name)}.` : ""} Start there, then check the table below for context.`,
+    `${leader ? `${esc(leader.team)} lead on ${leader.pts} points.` : `The table is still settling.`} ${n ? `Our numbers cover ${count} across the next few days.` : "New fixtures appear here as bookmakers publish them."} Every price and pick is shown with its odds so you can judge it yourself.`,
+    `${best ? `Start with ${esc(best.m.home.name)} v ${esc(best.m.away.name)}: the model gives ${esc(best.b.label)} a ${Math.round(best.b.pct)}% chance.` : `Nothing in ${esc(league.name)} clears our threshold right now, so there are no strong picks.`} ${n ? `There are ${count} to follow.` : ""}`
+  ];
+  return `<p class="lede">${angles[i]}</p>`;
+}
+
+// League page, rebuilt as a matchday board: a league identity bar, a day-by-day fixture feed with probability splits,
+// and a sticky table beside it on wide screens. Its own visual language (league-coloured, not card-and-chance-bar).
+function leagueFeedItem(m) {
+  const tp = topPick(m);
+  const mk = marketsOf(m);
+  const pct = tp ? Math.round(tp.pct) : null;
+  return `<a class="lgb-fx" href="${matchPath(m)}">
+    <span class="lgb-time">${clock(m.ts)}</span>
+    <span class="lgb-teams"><span>${crest(m.home)}${esc(m.home.name)}</span><span>${crest(m.away)}${esc(m.away.name)}</span></span>
+    <span class="lgb-read">${splitBar(mk) || ""}${tp ? `<span class="lgb-pick"><small>Model</small>${esc(tp.label)} <b>${pct}%</b></span>` : `<span class="lgb-pick none">No clear pick</span>`}</span>
+    <span class="lgb-go" aria-hidden="true">›</span>
+  </a>`;
+}
+
+function leagueFeed(matches) {
+  if (!matches.length) return `<div class="empty">Nothing scheduled in the next few days.</div>`;
+  const days = new Map();
+  for (const m of matches.slice().sort((a, b) => a.ts - b.ts)) {
+    const k = dayKey(m.ts);
+    days.set(k, [...(days.get(k) || []), m]);
+  }
+  return [...days.entries()].map(([k, list]) => `<div class="lgb-day">
+      <h3><span>${esc(longDate(list[0].ts))}</span><small>${list.length} ${list.length === 1 ? "match" : "matches"}</small></h3>
+      <div class="lgb-list">${list.map(leagueFeedItem).join("")}</div>
+    </div>`).join("");
+}
+
 export function leaguePage(ctx, { league, matches, standings, allLeagues, recent = [], snapshot = null }) {
   const path = leaguePath(league);
-  const groups = groupByLeague(matches);
   const picks = rankPicks("banker-picks", matches).slice(0, 4);
-  const table = standingsTable(standings);
   const st = leagueStory(league, matches, ctx, standings);
+  const hue = (Number(league.id) * 47) % 360;
+  const rows = (standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || [];
+  const teams = rows.length;
+  const live = (ctx.liveItems || []).filter((m) => m.league && m.league.id === league.id).length;
+  const leader = rows.find((r) => r.pts !== null && r.p);
+  const stats = `<div class="lgb-stats">
+      <div><b>${matches.length}</b><span>to play</span></div>
+      <div><b>${live}</b><span>live now</span></div>
+      <div><b>${teams || "–"}</b><span>teams</span></div>
+      <div><b>${leader ? leader.pts : "–"}</b><span>${leader ? esc(leader.team) : "leader pts"}</span></div>
+    </div>`;
+  const best = picks.length ? `<div class="lgb-best" role="list">${picks.map((it) => {
+      const tp = topPick(it.m || it);
+      return tp ? `<a role="listitem" class="lgb-chip" href="${matchPath(it.m || it)}"><b>${Math.round(tp.pct)}%</b><span>${esc((it.m || it).home.name)} v ${esc((it.m || it).away.name)}</span><em>${esc(tp.label)}</em></a>` : "";
+    }).join("")}</div>` : "";
+  const nextKo = matches.filter((x) => x.ts > Date.now()).sort((a, b) => a.ts - b.ts)[0];
   const body = `${crumbs([["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])}
-  <header class="pagehead lghero">${lgIcon(league)}<div><h1>${esc(league.name)} predictions, odds and table</h1><p>${matches.length ? `${matches.length} upcoming matches with odds and model probabilities.` : "No upcoming matches are loaded for this league right now."}</p></div></header>
-  ${picks.length ? `<section class="block"><div class="block-head"><h2>Best picks in ${esc(league.name)}</h2></div><div class="pickrail">${picks.map(pickCard).join("")}</div></section>` : ""}
-  ${leaguePulse(league, [...matches, ...recent], standings, ctx)}
-  ${weekHtml(league, recent, matches, ctx)}
-  ${moversHtml(standings, snapshot)}
-  <section class="block"><div class="block-head"><h2>Upcoming matches</h2></div>${matches.length ? toolbar(groups) + groups.map((g) => leagueBlock(g)).join("") : `<div class="empty">Nothing scheduled in the next few days.</div>`}</section>
-  <section class="block"><div class="block-head"><h2>${esc(league.name)} table</h2></div>${table || `<div class="empty">A table is not available for this league yet.</div>`}</section>
-  <section class="block"><div class="block-head"><h2>Other leagues</h2></div><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>`;
+  <div class="lgb" style="--lh:${hue}">
+    <header class="lgb-hero">
+      <div class="lgb-id">${lgIcon(league)}<div><small>${esc(league.cn || "")}</small><h1>${esc(league.name)} predictions today</h1><p>Odds, model chances, tips and the live table, updated through the day.</p>${nextKo ? `<p class="kickcount">Next kick-off <b data-ko="${nextKo.ts}">${clock(nextKo.ts)}</b> · ${esc(nextKo.home.name)} v ${esc(nextKo.away.name)}</p>` : ""}</div></div>
+      ${stats}
+    </header>
+    ${leagueLede(league, matches, standings, ctx)}
+    ${best ? `<section class="lgb-strip"><h2>Strongest model picks</h2>${best}</section>` : ""}
+    <div class="lgb-grid">
+      <div class="lgb-main">
+        <section class="lgb-section"><h2>Fixtures</h2>${leagueFeed(matches)}</section>
+        ${weekHtml(league, recent, matches, ctx)}
+        ${moversHtml(standings, snapshot)}
+        ${leaguePulse(league, [...matches, ...recent], standings, ctx)}
+      </div>
+      <aside class="lgb-side">
+        <section class="lgb-table"><h2>Table</h2>${standingsTable(standings) || `<p class="mut">The table for ${esc(league.name)} is not in our data yet. Fixtures and picks still update as usual.</p>`}</section>
+        <section class="lgb-others"><h2>More leagues</h2><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>
+      </aside>
+    </div>
+  </div>`;
   return {
-    title: `${league.name} Predictions, Odds and Table | ${SITE_NAME}`,
-    desc: `${league.name} predictions for ${longDate(Date.now())}: ${st.f.now.length ? `${st.f.now.length} live now, ` : ""}${st.f.today.length || st.f.ahead.length} to play${st.f.best ? `, top pick ${st.f.best.label} (${Math.round(st.f.best.pct)}%)` : ""}. Odds, over 2.5 goals, both teams to score and the latest table.`.slice(0, 300),
+    title: `${league.name} Predictions Today: Odds, Tips and Table | ${SITE_NAME}`,
+    desc: `${league.name} predictions for ${longDate(Date.now())}: ${st.f.now.length ? `${st.f.now.length} live now, ` : ""}${st.f.today.length || st.f.ahead.length} to play${st.f.best ? `, top pick ${st.f.best.label} (${Math.round(st.f.best.pct)}%)` : ""}. Odds, model chances and the league table.`,
     path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Leagues", "/leagues"], [league.name, path]])]
   };
 }
@@ -1076,7 +1182,11 @@ function matchLayoutHtml(m, standings) {
 }
 
 function leaguePulse(league, matches, standings, ctx) {
-  return leagueLayoutHtml(league, matches, standings, ctx);
+  // Leagues without a table in our data still get their fixtures, odds and picks. The table-based analysis is skipped for them.
+  const rows = (standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || [];
+  if (rows.filter((r) => r.p && r.pts !== null).length < 2) return "";
+  try { return leagueLayoutHtml(league, matches, standings, ctx); }
+  catch (e) { console.error("League analysis:", league && league.name, e.message); return ""; }
 }
 
 // ---------- match lifecycle: what the page says before, during, at half-time and after the match ----------
@@ -1159,6 +1269,38 @@ function matchStageHtml(m, standings, nextFor) {
   return `<section class="block v4-stage v4-st-${stage}"><div class="v4-stg-h">${esc(title)}</div>${body}${next}</section>`;
 }
 
+// Questions a reader actually asks about this match, answered from its own numbers.
+function matchFaq(m) {
+  const p = m.prediction, o = m.odds || {};
+  const b = p ? bestSide(m) : null;
+  const who = b ? (b.k === "X" ? "a draw" : b.k === "1" ? m.home.name : m.away.name) : "";
+  const qa = [];
+  qa.push([`When does ${m.home.name} vs ${m.away.name} kick off?`, `${longDate(m.ts)} at ${clock(m.ts)} (West Africa Time). Times change if the fixture is moved, so check the league page before you act on it.`]);
+  if (b) qa.push([`What is the model pick for ${m.home.name} vs ${m.away.name}?`, `The model's strongest outcome is ${who} at ${Math.round(b.pct)}%.${b.odd ? ` The market price is ${fmtOdd(b.odd)}.` : ""} It is a probability estimate, not a guarantee.`]);
+  if (b && b.odd) {
+    const e = edgeOf(b.pct, b.odd);
+    qa.push([`Is the price on ${who} good value?`, e === null ? "There is not enough price information to judge that yet." : e >= 0.06 ? `On our numbers the price is higher than the chance suggests, an edge of about +${(e * 100).toFixed(1)}%. Value is still no guarantee of a win.` : e <= -0.08 ? `The price is shorter than the model's chance, so the bookmaker already thinks the result is likely. There is little value in it.` : `The price is close to the model's chance, so the market and our numbers agree.`]);
+  }
+  if (p && p.most_likely_score) qa.push([`What scoreline does the model expect?`, `The most likely single scoreline is ${p.most_likely_score}. Most matches end with a different score, so treat it as the centre of the range, not a prediction.`]);
+  return qa;
+}
+
+// Model vs market: the model's share of each outcome against the bookmaker price with the margin removed.
+function modelVsMarket(m) {
+  const p = m.prediction, o = m.odds || {};
+  if (!p || !o.home_win || !o.draw || !o.away_win) return "";
+  const mod = [num(p.home_win_pct), num(p.draw_pct), num(p.away_win_pct)];
+  if (mod.some((x) => x === null)) return "";
+  const imp = [1 / o.home_win, 1 / o.draw, 1 / o.away_win], tot = imp.reduce((t, x) => t + x, 0);
+  const rows = [[m.home.name, mod[0], (imp[0] / tot) * 100], ["Draw", mod[1], (imp[1] / tot) * 100], [m.away.name, mod[2], (imp[2] / tot) * 100]];
+  return `<section class="block mvm"><h2>Model vs market</h2>
+    ${rows.map(([n, a, b]) => `<div class="mvm-row"><span class="mvm-n">${esc(n)}</span>
+      <span class="mvm-bars" aria-hidden="true"><i class="mv-m" style="width:${Math.round(a)}%"></i><i class="mv-k" style="width:${Math.round(b)}%"></i></span>
+      <b class="mvm-v">${Math.round(a)}%<small> vs ${Math.round(b)}%</small></b></div>`).join("")}
+    <p class="mvm-key"><i class="mv-m"></i> Model <i class="mv-k"></i> Market (margin removed)</p>
+  </section>`;
+}
+
 export function matchPage(ctx, { m, related, standings = null, nextFor = null }) {
   const path = matchPath(m);
   const p = m.prediction;
@@ -1181,14 +1323,16 @@ export function matchPage(ctx, { m, related, standings = null, nextFor = null })
   </header>
   ${b ? `<section class="verdict"><div><small>Model pick</small><b>${esc(b.label)}</b></div><div class="vpct">${Math.round(b.pct)}<small>%</small></div>${verdictState ? `<div><small>Result</small><span class="pst ${verdictState}">${PICK_TXT[verdictState]}</span></div>` : ""}${b.odd ? `<div><small>Market odds</small><b class="mono">${fmtOdd(b.odd)}</b></div>` : ""}</section>` : ""}
   ${stageBlock(m, bs, verdictState)}
-  ${p ? `<section class="block"><h2>Win probability</h2>${bar(m.home.name, p.home_win_pct)}${bar("Draw", p.draw_pct)}${bar(m.away.name, p.away_win_pct)}</section>` : ""}
+  <div class="m30"><div class="m30-a">${modelVsMarket(m)}${p ? `<section class="block"><h2>Win probability</h2>${bar(m.home.name, p.home_win_pct)}${bar("Draw", p.draw_pct)}${bar(m.away.name, p.away_win_pct)}</section>` : ""}</div><div class="m30-b">
   <section class="block"><h2>Odds and model chances</h2><p class="mnote show">Tap a price to add it to your pick slip.</p>
     ${groupBlock("Match result", mk["1x2"])}${groupBlock("Goals", mk.goals)}${groupBlock("Both teams to score", mk.btts)}${groupBlock("Double chance <small>(calculated)</small>", mk.dc)}
-  </section>
+  </section></div></div>
   ${compareTable(m) ? `<section class="block"><h2>${esc(m.home.name)} vs ${esc(m.away.name)}: comparison</h2><div class="tablewrap">${compareTable(m)}</div><p class="mnote show">The greener side leads on that line. Edge is model chance × odds − 1.</p></section>` : ""}
   ${matchStageHtml(m, standings, nextFor)}
   ${matchLayoutHtml(m, standings)}
   <details class="v4-more"><summary>Full match analysis<span>Tap to read</span></summary><div class="v4-prose">${analysis(m).map((t) => `<p>${esc(t)}</p>`).join("")}</div></details>
+  <details class="v4-more"><summary>Questions about this match<span>Tap to read</span></summary><div class="v4-prose">${matchFaq(m).map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join("")}</div></details>
+  ${joinBlock()}
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}
   <section class="block"><div class="block-head"><h2>More prediction types</h2><a href="/predictions">All →</a></div><div class="catgrid small">${CATEGORIES.slice(0, 6).map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>`;
   const iso = m.kickoff || undefined;
@@ -1196,6 +1340,7 @@ export function matchPage(ctx, { m, related, standings = null, nextFor = null })
     title: `${title} | ${SITE_NAME}`,
     desc: `${m.home.name} vs ${m.away.name} (${m.league.name}, ${nice}): odds, win probability, goals and both teams to score predictions.${b ? ` Model pick: ${b.label} (${Math.round(b.pct)}%).` : ""}`,
     path, body,
+    noindex: m.res?.state === "live" || !m.prediction,
     ld: [
       crumbLd(ctx.origin, [["Home", "/"], [m.league.name, m.league.id != null ? leaguePath(m.league) : "/leagues"], [`${m.home.name} vs ${m.away.name}`, path]]),
       { "@context": "https://schema.org", "@type": "SportsEvent", name: `${m.home.name} vs ${m.away.name}`, sport: "Football", startDate: iso, eventStatus: "https://schema.org/EventScheduled", homeTeam: { "@type": "SportsTeam", name: m.home.name }, awayTeam: { "@type": "SportsTeam", name: m.away.name }, url: ctx.origin + path }
@@ -1208,7 +1353,48 @@ export function livePage(ctx, { live, upcoming = [] }) {
   ${pageHead("Live football scores", "Updates by itself every 15 seconds. Each card shows whether our pick is winning.")}
   <div id="liveList" data-live-page>${liveList(live)}</div>
   ${upcoming.length ? `<section class="block"><div class="block-head"><h2>Kicking off next</h2><a href="/football-predictions-today">All matches →</a></div><div class="reclist">${upcoming.slice(0, 6).map((m) => { const tp = topPick(m); return `<a class="rec" href="${matchPath(m)}"><span class="rec-lg">${esc(m.league.name)} · ${timeEl(m, "w-top")}</span><span class="rec-m"><span>${esc(m.home.name)}</span><b><i>v</i></b><span>${esc(m.away.name)}</span></span>${tp ? `<span class="rec-p"><span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span></span>` : ""}</a>`; }).join("")}</div></section>` : ""}`;
-  return { title: `Live Football Scores | ${SITE_NAME}`, desc: "Live football scores from leagues around the world, updated every 30 seconds.", path: "/live", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Live scores", "/live"]])] };
+  return { title: `Live Football Scores | ${SITE_NAME}`, desc: "Live football scores from leagues around the world, updated every 30 seconds.", path: "/live", body, noindex: true, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Live scores", "/live"]])] };
+}
+
+// Public track record: every settled pick in the window we keep, with totals, months and the recent list.
+// A short "stay in touch" block: the Telegram channel and WhatsApp, linked from the pages people read most.
+function joinBlock() {
+  return `<section class="block join"><div class="block-head"><h2>Get the daily picks</h2></div>
+    <p class="mut" style="margin:0 0 10px">Daily updates, results and match notes come through our Telegram channel.</p>
+    <div class="join-btns"><a class="join-btn tg" href="${CONTACT.channelLink}" rel="noopener">Join Telegram</a><a class="join-btn wa" href="${CONTACT.whatsappLink}" rel="noopener">WhatsApp us</a></div></section>`;
+}
+
+export function trackRecordPage(ctx, { record }) {
+  const list = (record && record.list) || [];
+  const total = record ? record.total : 0, won = record ? record.won : 0, rate = record ? record.rate : null;
+  const dates = list.map((r) => r.m.ts).filter(Boolean);
+  const from = dates.length ? shortDate(Math.min(...dates)) : "", to = dates.length ? shortDate(Math.max(...dates)) : "";
+  const months = new Map();
+  for (const r of list) {
+    const k = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "Africa/Lagos" }).format(r.m.ts);
+    const x = months.get(k) || { won: 0, total: 0, ts: r.m.ts };
+    x.total++; if (r.state === "won") x.won++; months.set(k, x);
+  }
+  const groups = (record && record.groups) || [];
+  const tiles = `<div class="kp"><div><b>${rate === null ? "–" : `${rate}%`}</b><span>Won · ${won} of ${total} picks</span></div>${groups.map((g) => `<div><b>${g.rate}%</b><span>${esc(g.name)} · ${g.won} of ${g.total}</span></div>`).join("")}</div>`;
+  const monthRows = [...months.entries()].map(([k, x]) => `<tr><td class="l">${esc(k)}</td><td>${x.won}</td><td>${x.total}</td><td>${Math.round((x.won / x.total) * 100)}%</td></tr>`).join("");
+  const recent = list.slice(0, 60).map((r) => `<div class="tr-row ${r.state}"><span class="tr-d">${shortDate(r.m.ts)}</span>
+      <span class="tr-m"><b>${esc(r.m.home.name)} ${r.h}–${r.a} ${esc(r.m.away.name)}</b><small>${esc(r.m.league.name)}</small></span>
+      <span class="tr-p"><small>Pick</small>${esc(r.pick.label)}${r.pick.odd ? ` <em>@${fmtOdd(r.pick.odd)}</em>` : ""}</span>
+      <span class="tr-s ${r.state}">${r.state === "won" ? "Won" : r.state === "lost" ? "Lost" : "Open"}</span></div>`).join("");
+  const body = `${crumbs([["Home", "/"], ["Track record", "/track-record"]])}
+  ${pageHead("Our track record", `Every published pick we settled between ${from || "–"} and ${to || "–"}. Nothing is removed, win or lose.`)}
+  <div class="mx">
+    <section class="mx-card"><h2>Overall</h2>${total ? tiles : `<p class="mut">We are still building the record. Settled picks appear here as matches finish.</p>`}
+      <p class="mut" style="font-size:.82rem;margin:.8rem 0 0">A win rate is only one part of the story. Check the odds next to each pick, because a 40% pick at 2.60 can be worth more than a 70% pick at 1.20.</p></section>
+    ${monthRows ? `<section class="mx-card"><h2>By month</h2><div class="tablewrap"><table class="stand"><thead><tr><th class="l">Month</th><th>Won</th><th>Picks</th><th>Rate</th></tr></thead><tbody>${monthRows}</tbody></table></div></section>` : ""}
+    ${recent ? `<section class="mx-card"><h2>Recent picks</h2><div class="tr-list">${recent}</div></section>` : ""}
+  </div>`;
+  return {
+    title: `Track Record: Every Published Pick | ${SITE_NAME}`,
+    desc: total ? `${SITE_NAME} track record: ${won} of ${total} published picks won (${rate}%) from ${from} to ${to}, with odds and results for every pick.` : `${SITE_NAME} track record: every published pick and its result, with odds, updated as matches finish.`,
+    path: "/track-record", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Track record", "/track-record"]])]
+  };
 }
 
 export function resultsPage(ctx, { results }) {

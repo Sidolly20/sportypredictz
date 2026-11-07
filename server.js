@@ -39,11 +39,11 @@ app.use(compression());
 // Set CSP_MODE=report in Render to test a change without blocking anything (violations are only logged by the browser).
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  process.env.GOATCOUNTER_CODE ? "script-src 'self' https://gc.zgo.at" : "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: https:",
-  "connect-src 'self'",
+  process.env.GOATCOUNTER_CODE ? `connect-src 'self' https://${process.env.GOATCOUNTER_CODE}.goatcounter.com` : "connect-src 'self'",
   "manifest-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -191,6 +191,7 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
   }
 });
 
+app.get("/track-record", route(({ ctx }) => V.trackRecordPage(ctx, { record: ctx.record }), { maxAge: 300, needsRecord: true }));
 app.get("/live", route(({ ctx, board }) => V.livePage(ctx, { live: ctx.liveItems, upcoming: board.matches.filter((m) => !m.res || m.res.state === "pre") }), { maxAge: 10 }));
 app.get("/results", route(async ({ ctx }) => V.resultsPage(ctx, { results: (await getResults()).results || [] }), { maxAge: 60, needsRecord: true }));
 app.get("/favourites", route(({ ctx }) => V.favouritesPage(ctx), { maxAge: 300 }));
@@ -244,10 +245,10 @@ app.get("/sitemap.xml", async (req, res) => {
   const urls = [
     ["/", 1.0], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
     ...CATEGORIES.map((c) => [`/predictions/${c.slug}`, 0.8]),
-    ["/leagues", 0.7], ["/live", 0.6], ["/results", 0.5],
+    ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6],
     ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
     ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
-    ...board.matches.slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
+    ...board.matches.filter((m) => m.prediction && m.res?.state !== "live").slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
   ];
   const day = today;
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr, lm]) => `<url><loc>${origin}${p}</loc><lastmod>${lm || day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);

@@ -52,3 +52,13 @@ Rows older than `STORE_KEEP_DAYS` (default 14) are removed automatically. `/api/
 - App icons live in `/assets` (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`). `/site.webmanifest` lets phones install the site to the home screen.
 - `/llms.txt` gives AI assistants a short, accurate summary of the site. It is only published once live data is on (not in demo mode).
 - Security headers are set in server.js. If a browser console shows a blocked resource after an update, set `CSP_MODE=report` in Render to log violations without blocking, then fix the source and switch back.
+
+## What search engines see (indexing rules)
+- Indexed: home, today and tomorrow, bet-type pages, every league page, results, the about, how-it-works, terms, privacy and responsible-gambling pages.
+- Not indexed: the live page, saved matches, past-day prediction pages, matches still waiting for a model read, and any match while it is being played.
+- The sitemap lists only matches that have a model read and are not live, so upcoming matches that expire are not pushed to search engines.
+
+## Track record, contact and analytics (added in the features update)
+- `/track-record` shows every settled pick the site keeps (overall rate, rate per market, months and the recent list). It reads the same record as the homepage.
+- Telegram and WhatsApp links appear in the footer and in the side column of the homepage and under each match.
+- Optional analytics: set `GOATCOUNTER_CODE` in Render to your GoatCounter code. Leave it unset to keep analytics off.
