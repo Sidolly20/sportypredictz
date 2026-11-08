@@ -1178,3 +1178,19 @@ html, body { overflow-x: hidden; max-width: 100%; }
     white-space: nowrap;
   }
 }
+
+/* ---- Footer as cards ---- */
+.foot-card .foot-brand, .foot-card .foot-col, .foot-card .foot-bar {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+}
+.foot-card .foot-grid { gap: 14px; }
+.foot-card .foot-bar { margin-top: 16px; border-top: 1px solid var(--line); }
+.foot-card .foot-col a { display: block; padding: 4px 0; }
+
+/* ---- Page headings: centred and composed ---- */
+.pagehead { text-align: center; }
+.pagehead h1 { margin-left: auto; margin-right: auto; }
+.pagehead p { margin-left: auto; margin-right: auto; max-width: 62ch; }
+.pagehead .chips { justify-content: center; }
+.block-head { justify-content: center; text-align: center; }
+.block-head h2 { margin-left: auto; margin-right: auto; }

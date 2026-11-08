@@ -463,14 +463,14 @@ ${ctx.demo ? `<div class="demo-banner"><b>DEMO DATA.</b> Not connected to odds-a
   <div class="top-right"><a class="saved${active("/favourites")}" href="/favourites">★ <span>Saved</span> <i class="count" id="favCount" hidden>0</i></a><span class="age" title="18 or older only">18+</span></div>
 </header>
 <div class="ticker" aria-label="Live scores and next matches"><a class="ticker-label${t.label === "LIVE" ? " live" : ""}" id="tickerLabel" href="/live">${t.label}</a><div class="ticker-window"><div class="ticker-track" id="ticker">${t.items}</div></div></div>
-<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>
+<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a><a class="catpill${o.path === '/predictions/weekend-match-predictions' ? " on" : ""}" href="/predictions/weekend-match-predictions">Weekend picks</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>
 <main class="wrap" id="main">
 ${o.body}
 </main>
-<footer class="foot">
+<footer class="foot foot-card">
   <div class="foot-grid">
     <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p><p class="foot-join"><button type="button" class="linkish" data-contact="channel">Telegram channel</button> · <button type="button" class="linkish" data-contact="whatsapp">WhatsApp</button> · <button type="button" class="linkish" data-contact="email">Email</button></p></div>
-    <div class="foot-col"><h5>Predictions</h5>${CATEGORIES.slice(0, 6).map((c) => `<a href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}<a href="/predictions">See all tips</a></div>
+    <div class="foot-col"><h5>Predictions</h5><a href="/predictions/weekend-match-predictions">Weekend match predictions</a>${CATEGORIES.slice(0, 6).map((c) => `<a href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}<a href="/predictions">See all tips</a></div>
     <div class="foot-col"><h5>Football</h5><a href="/football-predictions-today">Today's matches</a><a href="/football-predictions-tomorrow">Tomorrow's matches</a><a href="/live">Live scores</a><a href="/results">Results</a><a href="/leagues">All leagues</a>${topLeagues.map((l) => `<a class="lg-link" href="${leaguePath(l)}">${esc(l.name)}</a>`).join("")}</div>
     <div class="foot-col"><h5>Site</h5><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/track-record">Track record</a><a href="/contact">Contact</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
   </div>
