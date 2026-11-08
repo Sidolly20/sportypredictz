@@ -221,6 +221,8 @@ const STALE_MIN = 4;
 
 // No match stays "live" longer than this after kick-off, whatever a feed still says (stale data protection).
 const LIVE_MAX_MS = 2.75 * 3600e3;
+// A football match with no final score is only treated as being played for this long after kick-off.
+export const PLAY_MS = 105 * 60e3;
 
 export function scoreInfo(m, lv, rs, now = Date.now()) {
   const kick = m.ts || (lv && lv.ts) || 0;
@@ -245,14 +247,31 @@ export function scoreInfo(m, lv, rs, now = Date.now()) {
     const [h, a] = scoreOfRaw(done);
     if (h !== null && a !== null) return { state: "ft", h, a, label: "FT" };
   }
-  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < LIVE_MAX_MS ? "Started" : "Result pending" };
+  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < PLAY_MS ? "Started" : "Result pending" };
   return { state: "pre", h: null, a: null, label: "" };
 }
+
+// Team names differ between feeds ("Sporting CP" / "Sporting Clube de Portugal"). Two teams are the same
+// when they share a distinctive word. Both teams must match, and kick-off must be within an hour.
+const TEAM_STOP = new Set(["fc", "afc", "sc", "cf", "ac", "as", "us", "ss", "rc", "club", "clube", "calcio", "the", "de", "del", "real", "sport", "sporting"].filter((w) => w !== "sporting"));
+const teamTokens = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .split(/[^a-z]+/).filter((w) => w.length >= 3 && !TEAM_STOP.has(w));
+export function sameTeam(a, b) {
+  const ta = teamTokens(a), tb = new Set(teamTokens(b));
+  return ta.some((w) => tb.has(w));
+}
+const sameFixture = (r, m) => r.home && r.away && m.home && m.away && Math.abs((r.ts || 0) - (m.ts || 0)) < 60 * 60e3
+  && sameTeam(r.home.name, m.home.name) && sameTeam(r.away.name, m.away.name);
 
 export function annotate(matches, liveList, resultList, now = Date.now()) {
   const L = new Map((liveList || []).map((x) => [Number(x.id), x]));
   const R = new Map((resultList || []).map((x) => [Number(x.id), x]));
-  return matches.map((m) => ({ ...m, res: scoreInfo(m, L.get(m.id), R.get(m.id), now) }));
+  const list = resultList || [];
+  return matches.map((m) => {
+    // Match a finished result by id first, then by team names and kick-off time (results may carry another feed's id).
+    const r = R.get(Number(m.id)) || (m.ts ? list.find((x) => sameFixture(x, m)) : null);
+    return { ...m, res: scoreInfo(m, L.get(Number(m.id)), r, now) };
+  });
 }
 
 export const scoreMap = (matches) => Object.fromEntries(matches.filter((m) => m.res && m.res.state !== "pre").map((m) => [m.id, [m.res.state, m.res.h, m.res.a, m.res.label]]));
