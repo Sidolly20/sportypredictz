@@ -13,6 +13,11 @@ export const LEGS = {
 };
 // Minimum model chance per game. More combo keeps games strong (80%, then 75%).
 // Fewer combo takes bigger risks per game, so it accepts lower chances and still picks the strongest first.
+// A match that has kicked off, or starts within 15 minutes, is not offered.
+export const LEAD_MS = 15 * 60 * 1000;
+export const upcoming = (matches, now = Date.now()) =>
+  matches.filter((m) => { const t = Date.parse(m.t); return Number.isFinite(t) && t - now > LEAD_MS; });
+
 export const THRESHOLDS_BY_MODE = { more: [80, 75], fewer: [65, 60, 55] };
 export const thresholdsFor = (mode) => THRESHOLDS_BY_MODE[mode];
 export const MODE_TEXT = {

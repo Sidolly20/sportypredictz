@@ -407,7 +407,58 @@ export const CONTACT = {
   emailLink: "mailto:allotips8@gmail.com"
 };
 
+
+// Popular clubs with a team page. Aliases are the names the football feeds use for the same club.
+export const TEAMS = [
+  { name: "Arsenal", aliases: ["Arsenal"] },
+  { name: "Chelsea", aliases: ["Chelsea"] },
+  { name: "Liverpool", aliases: ["Liverpool"] },
+  { name: "Manchester City", aliases: ["Manchester City", "Man City"] },
+  { name: "Manchester United", aliases: ["Manchester United", "Man United", "Man Utd"] },
+  { name: "Tottenham", aliases: ["Tottenham", "Tottenham Hotspur", "Spurs"] },
+  { name: "Newcastle", aliases: ["Newcastle", "Newcastle United"] },
+  { name: "Real Madrid", aliases: ["Real Madrid"] },
+  { name: "Barcelona", aliases: ["Barcelona", "FC Barcelona"] },
+  { name: "Atletico Madrid", aliases: ["Atletico Madrid", "Atlético Madrid", "Atletico"] },
+  { name: "Bayern Munich", aliases: ["Bayern Munich", "Bayern München", "FC Bayern"] },
+  { name: "Borussia Dortmund", aliases: ["Borussia Dortmund", "Dortmund"] },
+  { name: "PSG", aliases: ["Paris Saint-Germain", "Paris Saint Germain", "PSG"] },
+  { name: "Juventus", aliases: ["Juventus"] },
+  { name: "AC Milan", aliases: ["AC Milan", "Milan"] },
+  { name: "Inter Milan", aliases: ["Inter", "Inter Milan", "FC Internazionale"] },
+  { name: "Napoli", aliases: ["Napoli", "SSC Napoli"] },
+  { name: "Ajax", aliases: ["Ajax", "AFC Ajax"] },
+  { name: "Benfica", aliases: ["Benfica", "SL Benfica"] },
+  { name: "Porto", aliases: ["Porto", "FC Porto"] },
+  { name: "Sporting CP", aliases: ["Sporting CP", "Sporting Clube de Portugal", "Sporting Lisbon"] },
+  { name: "Celtic", aliases: ["Celtic"] },
+  { name: "Galatasaray", aliases: ["Galatasaray"] },
+  { name: "Fenerbahce", aliases: ["Fenerbahce", "Fenerbahçe"] },
+  { name: "Al Ahly", aliases: ["Al Ahly", "Al-Ahly"] },
+  { name: "Kaizer Chiefs", aliases: ["Kaizer Chiefs"] },
+  { name: "Mamelodi Sundowns", aliases: ["Mamelodi Sundowns", "Sundowns"] },
+  { name: "Enyimba", aliases: ["Enyimba", "Enyimba FC"] },
+  { name: "Rangers", aliases: ["Rangers", "Rangers FC"] },
+  { name: "Lille", aliases: ["Lille", "LOSC Lille"] },
+  { name: "Kwara United", aliases: ["Kwara United", "Kwara Utd"] },
+  { name: "Kano Pillars", aliases: ["Kano Pillars", "Kano Pillars FC"] }
+].map((t) => ({ ...t, slug: t.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") }));
+export const TEAM_BY_SLUG = Object.fromEntries(TEAMS.map((t) => [t.slug, t]));
+
 export const PAGES = {
+  "how-we-predict": {
+    title: "How Our Football Predictions Work | SportyPredictz",
+    desc: "How SportyPredictz builds football predictions: where the odds come from, how bookmaker margins are removed, what the model does, and what it cannot do.",
+    h1: "How our football predictions work",
+    body: [
+      `<p>SportyPredictz is an information site. We do not take bets. Each prediction is an estimate built from two things: the bookmaker odds for a match, and a model read of how likely each result is.</p>`,
+      `<h2>Where the odds come from</h2><p>Odds are the prices bookmakers publish. Every bookmaker builds a margin into its prices, so the prices for all outcomes add up to more than 100%. We take that margin out to estimate the market's own chance for each outcome. That gives a fair comparison point for the model.</p>`,
+      `<h2>What the model does</h2><p>The model gives a percentage chance for each result and market, such as a home win, a draw, over 2.5 goals or both teams to score. A pick is only shown when its chance clears the minimum for its category. Each category page says what it uses.</p>`,
+      `<h2>What the model cannot do</h2><p>No model can predict a football result with certainty. Team news, injuries, weather and a single moment of play can change a match. A pick with a high chance can still lose, and a pick with a low chance can still win. Odds also move before kick-off.</p>`,
+      `<h2>How we show results</h2><p>When a match finishes, each pick is marked won or lost against the final score. Picks are kept on the <a href="/track-record">track record page</a> so you can judge the whole record, not one good or bad day.</p>`,
+      `<h2>Responsible use</h2><p>Use the predictions as information, not as advice to bet. Bet only where it is legal where you live, and only what you can afford to lose. See <a href="/responsible-gambling">responsible gambling</a> for help and warning signs.</p>`
+    ]
+  },
   contact: {
     title: "Contact SportyPredictz",
     desc: "Get in touch with SportyPredictz by email, WhatsApp or Telegram. Questions about a prediction, the site or a bug are welcome.",

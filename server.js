@@ -9,9 +9,9 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf, callOddsApi } from "./data.js";
+import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks } from "./logic.js";
-import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
+import { CATEGORIES, CAT_BY_SLUG, PAGES, TEAMS, TEAM_BY_SLUG } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
 import { storeStatus, startStoreJanitor, loadSnapshotNear } from "./store.js";
@@ -183,6 +183,12 @@ app.get("/leagues", route(({ ctx, board }) => {
   for (const m of board.matches) counts.set(m.league.id, (counts.get(m.league.id) || 0) + 1);
   return V.leaguesPage(ctx, { leagues: ctx.leagues, counts });
 }, { needsBoard: true }));
+app.get("/teams", route(({ ctx }) => V.teamsIndexPage(ctx, { teams: TEAMS }), { maxAge: 3600 }));
+app.get("/team/:slug", route(({ req, ctx, board }) => {
+  const team = TEAM_BY_SLUG[req.params.slug];
+  if (!team) return null;
+  return V.teamPage(ctx, { team, matches: V.teamMatches(board.matches, team) });
+}, { maxAge: 300, needsBoard: false }));
 app.get("/leagues/:slug", route(async ({ req, ctx, board }) => {
   const id = parseLeagueSlug(req.params.slug);
   const league = id != null ? seenLeagues.get(id) : null;
@@ -253,19 +259,6 @@ app.get("/api/debug/standings/:id", async (req, res) => {
   catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
 });
 
-// Temporary diagnostics: the raw odds-api answer for one match and for the results list (no keys in them).
-// Open /api/debug/match/<id> for a finished match that shows no score, and /api/debug/results for the list.
-app.get("/api/debug/match/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "id must be a number" });
-  try { res.json(await callOddsApi(`/v1/matches/${id}?include=odds,prediction`, 30)); }
-  catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
-});
-app.get("/api/debug/results", async (req, res) => {
-  try { res.json(await callOddsApi("/v1/results?limit=50", 30)); }
-  catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
-});
-
 if (/^google[a-z0-9]+\.html$/i.test(VERIFY_FILE)) {
   app.get(`/${VERIFY_FILE}`, (req, res) => res.type("text/html").send(`google-site-verification: ${VERIFY_FILE}`));
 }
@@ -286,11 +279,13 @@ app.get("/sitemap.xml", async (req, res) => {
   const today = todayKey();
   const urls = [
     ["/", 1.0], ["/build-slip", 0.9], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
-    ...CATEGORIES.map((c) => [`/predictions/${c.slug}`, 0.8]),
+    ...CATEGORIES.filter((c) => c.kind === "acca" || c.kind === "acca-hub" || rankPicks(c.slug, board.matches.filter((m) => !m.res || m.res.state === "pre")).length >= 3).map((c) => [`/predictions/${c.slug}`, 0.8]),
     ["/predictions/weekend-match-predictions", 0.9],
     ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6],
     ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
     ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
+    ["/teams", 0.6],
+    ...TEAMS.filter((t) => V.teamMatches(board.matches, t).length >= 2).map((t) => [`/team/${t.slug}`, 0.6]),
     ...board.matches.filter((m) => m.prediction && m.odds?.home_win && m.res?.state !== "live").slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
   ];
   const day = today;
@@ -373,12 +368,39 @@ app.get("/api/slip-data", async (req, res, next) => {
 app.get("/build-slip", route(({ ctx }) => V.slipPage(ctx), { maxAge: 300 }));
 
 // anything else
+const INDEXNOW_KEY = (process.env.INDEXNOW_KEY || "3f9c1a7e5b2d4f8a9c6e0b1d2f3a4b5c").replace(/[^a-z0-9-]/gi, "").slice(0, 128);
+app.get(`/${INDEXNOW_KEY}.txt`, (req, res) => res.type("text/plain").send(INDEXNOW_KEY));
 app.use(route(() => null));
+
+
+// IndexNow: tells Bing, Yandex and others when pages change, so they are found sooner. The key is public by design.
+async function pingIndexNow() {
+  if (DEMO || !SITE_URL) return;
+  try {
+    const host = new URL(SITE_URL).host;
+    const board = await getBoard();
+    const today = todayKey(), tomorrow = addDays(today, 1);
+    const urls = [
+      `${SITE_URL}/`, `${SITE_URL}/football-predictions-today`, `${SITE_URL}/football-predictions-tomorrow`,
+      `${SITE_URL}/predictions/weekend-match-predictions`,
+      ...CATEGORIES.filter((c) => c.kind !== "acca" && c.kind !== "acca-hub").map((c) => `${SITE_URL}/predictions/${c.slug}`),
+      ...TEAMS.map((t) => `${SITE_URL}/team/${t.slug}`),
+      ...board.matches.filter((m) => m.prediction && [today, tomorrow].includes(dayKeyOf(m.ts))).slice(0, 200).map((m) => `${SITE_URL}${matchPath(m)}`)
+    ];
+    const r = await fetch("https://api.indexnow.org/indexnow", {
+      method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ host, key: INDEXNOW_KEY, keyLocation: `${SITE_URL}/${INDEXNOW_KEY}.txt`, urlList: urls.slice(0, 10000) })
+    });
+    status.indexnow = { at: new Date().toISOString(), sent: urls.length, http: r.status };
+  } catch (err) { status.indexnow = { at: new Date().toISOString(), error: err.message }; }
+}
+setInterval(pingIndexNow, 60 * 60 * 1000).unref();
 
 app.listen(PORT, () => {
   console.log(`SportyPredictz running on port ${PORT}`);
   console.log(DEMO ? "ODDS_API_KEY_SPORTY is not set: showing DEMO data (and hiding from Google)." : `Using odds-api at ${API_BASE}`);
   startBoardLoop();
+  setTimeout(pingIndexNow, 90 * 1000).unref();
   startStoreJanitor();
   // Every 3 minutes, even with no visitors: save picks before kick-off and settle finished matches.
   const tick = async () => {

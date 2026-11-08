@@ -1,6 +1,6 @@
 // scout.js - Scout's FAQ panel (opened from the green FAQ button), a live match list, and the notes microphone.
 // The big logo on the page links straight to the AI slip builder. No language model, no paid service.
-import { legsOf } from "/slip-engine.js";
+import { legsOf, upcoming } from "/slip-engine.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -50,7 +50,7 @@ if (fab && panel) {
       return addMsg("bot", "I can't reach the match list right now. Try again in a moment.");
     }
     const key = tomorrow ? cache.tomorrow : cache.today;
-    const rows = cache.matches
+    const rows = upcoming(cache.matches)
       .filter((m) => m.d === key)
       .map((m) => ({ m, top: legsOf(m).sort((a, b) => b.pct - a.pct || b.odd - a.odd)[0] }))
       .filter((x) => x.top)

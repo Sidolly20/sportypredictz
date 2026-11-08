@@ -4,7 +4,7 @@ import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
   matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick, PLAY_MS
 , kickLabel} from "./logic.js";
-import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
+import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis, TEAMS } from "./content.js";
 
 // Optional analytics (GoatCounter: no cookies, counts visits only). Off unless GOATCOUNTER_CODE is set in Render.
 const GC_CODE = /^[a-z0-9-]{2,40}$/i.test(process.env.GOATCOUNTER_CODE || "") ? process.env.GOATCOUNTER_CODE : "";
@@ -602,6 +602,43 @@ export function homePage(ctx, { matches, live, updatedAt }) {
   };
 }
 
+
+// Daily summary: plain sentences filled from the day's real numbers. Several phrasings per idea;
+// the phrasing is chosen from the date and league, so pages read differently and stay the same on refresh.
+const pickPhrase = (seed, options) => options[hash(seed) % options.length];
+export function daySummary(list, key) {
+  if (!list.length) return "";
+  const leagues = [...new Set(list.map((m) => m.league.name))];
+  const picks = list.map((m) => ({ m, tp: topPick(m) })).filter((x) => x.tp).sort((a, b) => b.tp.pct - a.tp.pct);
+  const best = picks[0];
+  const drawish = list.filter((m) => num(m.prediction?.draw_pct) >= 28).length;
+  const goalsy = list.filter((m) => num(m.prediction?.over_25_pct) >= 60).length;
+  const out = [];
+  out.push(pickPhrase(key + "a", [
+    `${list.length} matches are on the list across ${leagues.length} ${leagues.length === 1 ? "competition" : "competitions"}.`,
+    `The list has ${list.length} matches from ${leagues.length} ${leagues.length === 1 ? "league" : "leagues"}.`,
+    `${plural(list.length, "match")} to look at, spread over ${leagues.length} ${leagues.length === 1 ? "league" : "leagues"}.`
+  ]));
+  if (best) out.push(pickPhrase(key + "b", [
+    `The strongest model read is ${best.m.home.name} vs ${best.m.away.name}, where the model gives "${best.tp.label}" a ${Math.round(best.tp.pct)}% chance.`,
+    `Furthest ahead on the model is ${best.tp.label} in ${best.m.home.name} vs ${best.m.away.name}, at ${Math.round(best.tp.pct)}%.`,
+    `The model is most confident about ${best.tp.label} (${best.m.home.name} vs ${best.m.away.name}), with ${Math.round(best.tp.pct)}%.`
+  ]));
+  if (goalsy) out.push(pickPhrase(key + "c", [
+    `${plural(goalsy, "match")} look like goal-rich games, with a model chance of over 2.5 goals at 60% or more.`,
+    `Over 2.5 goals is the leaning in ${plural(goalsy, "match")} on the list.`
+  ]));
+  if (drawish) out.push(pickPhrase(key + "d", [
+    `${plural(drawish, "match")} look evenly matched, with the draw at 28% or more.`,
+    `A draw is a live option in ${plural(drawish, "match")}, so those are worth a look if you follow the draw pages.`
+  ]));
+  out.push(pickPhrase(key + "e", [
+    "Odds and chances move before kick-off, so check the price again before you act on any pick.",
+    "Team news can change a match after these numbers are set, so read the match page close to kick-off."
+  ]));
+  return out.map((t) => `<p>${esc(t)}</p>`).join("");
+}
+
 export function dayPage(ctx, { matches, days, key }) {
   const today = todayKey();
   const list = matches.filter((m) => dayKey(m.ts) === key);
@@ -613,6 +650,7 @@ export function dayPage(ctx, { matches, days, key }) {
   ${crumbs([["Home", "/"], [`Predictions ${label}`, path]])}
   ${pageHead(`Football predictions ${label}`, `${esc(nice)} · ${list.length} matches · ${groups.length} leagues`)}
   ${dayTabs(days, key)}
+  ${list.length ? `<section class="prose daysum"><h2>${esc(label[0].toUpperCase() + label.slice(1))} at a glance</h2>${daySummary(list, key)}</section>` : ""}
   ${list.length ? toolbar(groups) + leagueBlocks(groups, { openN: 7 }) : `<div class="empty">No matches found for this day yet.<br>Try another day above.</div>`}
   <section class="prose"><h2>About these predictions</h2><p>Kick-off times are shown in your own time zone. Odds are a single market consensus price, and the model percentages are estimates. Tap any odds button to add it to your pick slip, or open a match for the full breakdown.</p></section>`;
   return {
@@ -721,6 +759,7 @@ export function categoryPage(ctx, { cat, matches }) {
   let list = "";
   let count = 0;
   let thin = false;
+  let listLd = null;
   const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
   if (cat.kind === "acca-hub") {
     const four = CATEGORIES.filter((c) => c.kind === "acca");
@@ -736,6 +775,8 @@ export function categoryPage(ctx, { cat, matches }) {
     count = items.length;
     // Fewer than 3 picks is too little for a search page: keep it live for visitors but out of Google's index.
     thin = items.length < 3;
+    listLd = items.length ? { "@context": "https://schema.org", "@type": "ItemList", name: cat.name, numberOfItems: items.length,
+      itemListElement: items.slice(0, 15).map((it, i) => ({ "@type": "ListItem", position: i + 1, url: ctx.origin + matchPath(it.m), name: `${it.m.home.name} vs ${it.m.away.name}` })) } : null;
     const weak = items.length && items.every((x) => x.weak);
     const byDay = new Map();
     const order = (it) => (it.m.res?.state === "live" ? 0 : it.m.res?.state === "ft" ? 2 : 1);
@@ -760,7 +801,7 @@ export function categoryPage(ctx, { cat, matches }) {
   ${faqHtml(cat.faq)}`;
   return {
     title: cat.title + ` | ${SITE_NAME}`, desc: cat.desc, path, body, noindex: thin,
-    ld: [crumbLd(ctx.origin, [["Home", "/"], ["Predictions", "/predictions"], [cat.name, path]]), faqLd(cat.faq)]
+    ld: [crumbLd(ctx.origin, [["Home", "/"], ["Predictions", "/predictions"], [cat.name, path]]), faqLd(cat.faq), ...(listLd ? [listLd] : [])]
   };
 }
 
@@ -1410,6 +1451,47 @@ function modelVsMarket(m) {
   </section>`;
 }
 
+
+// Exact club match: names are compared after dropping punctuation, accents and FC/AFC-style words,
+// so "Man City" never matches "Manchester United".
+const clubKey = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/\b(fc|afc|sc|cf|ac|as|us|ss|rc)\b/g, "").replace(/[^a-z0-9]/g, "");
+export const isClub = (name, team) => team.aliases.some((a) => clubKey(a) === clubKey(name));
+export const teamMatches = (matches, team) => matches.filter((m) => isClub(m.home.name, team) || isClub(m.away.name, team));
+
+export function teamPage(ctx, { team, matches }) {
+  const path = `/team/${team.slug}`;
+  const upcoming = matches.filter((m) => !m.res || m.res.state === "pre").sort((a, b) => a.ts - b.ts);
+  const results = matches.filter((m) => m.res && m.res.state === "ft").sort((a, b) => b.ts - a.ts).slice(0, 10);
+  const picks = upcoming.map((m) => ({ m, tp: topPick(m) })).filter((x) => x.tp).sort((a, b) => b.tp.pct - a.tp.pct).slice(0, 5);
+  const leagues = [...new Set(matches.map((m) => m.league.name))];
+  const next = upcoming[0];
+  const intro = next
+    ? `${team.name} have ${upcoming.length} upcoming ${upcoming.length === 1 ? "match" : "matches"} on our list${leagues.length ? ` across ${leagues.join(", ")}` : ""}. Next up: ${next.home.name} vs ${next.away.name} (${next.league.name}).`
+    : `No upcoming ${team.name} matches are on our list right now. Recent results are below, and new fixtures appear as they are added.`;
+  const body = `${crumbs([["Home", "/"], ["Teams", "/teams"], [team.name, path]])}
+  ${pageHead(`${team.name} predictions`, esc(intro))}
+  ${picks.length ? `<section class="block"><div class="block-head"><h2>${esc(team.name)}: strongest model picks</h2></div><div class="catgrid small">${picks.map((x) => `<a class="catcard" href="${matchPath(x.m)}"><b>${esc(x.m.home.name)} vs ${esc(x.m.away.name)}</b><span>${esc(x.tp.label)} · ${Math.round(x.tp.pct)}% model</span></a>`).join("")}</div></section>` : ""}
+  <section class="block"><div class="block-head"><h2>Upcoming ${esc(team.name)} matches</h2></div>${upcoming.length ? upcoming.map(matchRow).join("") : `<div class="empty">No upcoming matches on our list yet.</div>`}</section>
+  ${results.length ? `<section class="block"><div class="block-head"><h2>Recent ${esc(team.name)} results</h2></div>${results.map(matchRow).join("")}</section>` : ""}
+  <section class="prose"><h2>About ${esc(team.name)} predictions</h2><p>These predictions come from bookmaker odds and a model read of each match, with the margin taken out of the prices. Predictions are estimates, not guarantees. See <a href="/how-we-predict">how we predict</a> for what the model can and cannot do, and the <a href="/track-record">track record</a> for how past picks landed.</p></section>
+  <section class="block"><div class="block-head"><h2>Keep browsing</h2></div><div class="catgrid small"><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/football-predictions-tomorrow"><b>Tomorrow's predictions</b><span>Every match on tomorrow's list</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and final scores</span></a></div></section>`;
+  const indexable = upcoming.length + results.length >= 2;
+  return {
+    title: `${team.name} Predictions, Fixtures and Results | ${SITE_NAME}`,
+    desc: `${team.name} football predictions: upcoming matches, model picks, odds and recent results.${next ? ` Next: ${next.home.name} vs ${next.away.name}.` : ""}`,
+    path, body, noindex: !indexable,
+    ld: [crumbLd(ctx.origin, [["Home", "/"], ["Teams", "/teams"], [team.name, path]])]
+  };
+}
+
+export function teamsIndexPage(ctx, { teams }) {
+  const body = `${crumbs([["Home", "/"], ["Teams", "/teams"]])}
+  ${pageHead("Football team predictions", "Pick a club for its upcoming matches, model picks and recent results.")}
+  <div class="catgrid small">${teams.map((t) => `<a class="catcard" href="/team/${t.slug}"><b>${esc(t.name)}</b><span>Predictions and results</span></a>`).join("")}</div>`;
+  return { title: `Football Team Predictions | ${SITE_NAME}`, desc: "Football team pages: upcoming matches, model picks and recent results for popular clubs.", path: "/teams", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Teams", "/teams"]])] };
+}
+
 export function matchPage(ctx, { m, related, standings = null, nextFor = null }) {
   const path = matchPath(m);
   const p = m.prediction;
@@ -1443,6 +1525,8 @@ export function matchPage(ctx, { m, related, standings = null, nextFor = null })
   <details class="v4-more"><summary>Questions about this match<span>Tap to read</span></summary><div class="v4-prose">${matchFaq(m).map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join("")}</div></details>
   ${joinBlock()}
   ${related.length ? `<section class="block"><div class="block-head"><h2>More ${esc(m.league.name)} matches</h2></div>${related.map(matchRow).join("")}</section>` : ""}
+  ${TEAMS.filter((t) => isClub(m.home.name, t) || isClub(m.away.name, t)).length ? `<section class="block"><div class="block-head"><h2>Club pages</h2></div><div class="catgrid small">${TEAMS.filter((t) => isClub(m.home.name, t) || isClub(m.away.name, t)).map((t) => `<a class="catcard" href="/team/${t.slug}"><b>${esc(t.name)}</b><span>Upcoming matches and results</span></a>`).join("")}</div></section>` : ""}
+  <section class="block"><div class="block-head"><h2>Keep browsing</h2></div><div class="catgrid small"><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/football-predictions-tomorrow"><b>Tomorrow's predictions</b><span>Every match on tomorrow's list</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and final scores</span></a><a class="catcard" href="/track-record"><b>Track record</b><span>Every settled pick the site keeps</span></a><a class="catcard" href="/how-we-predict"><b>How we predict</b><span>How the model works and what it cannot do</span></a></div></section>
   <section class="block"><div class="block-head"><h2>More prediction types</h2><a href="/predictions">All →</a></div><div class="catgrid small">${CATEGORIES.slice(0, 6).map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>`;
   const iso = m.kickoff || undefined;
   return {
