@@ -5,7 +5,7 @@
 import { demoWindow, demoLive, demoResults, demoStandings } from "./demo.js";
 import { normMatch, num, todayKey, addDays, topPick, judge } from "./logic.js";
 import { fetchRecord, summarise } from "./pickLog.js";
-import { saveMatches, saveResults, loadMatchesBetween, loadMatch, loadFinished, saveSnapshot, STORE_ON, storeStatus } from "./store.js";
+import { saveMatches, saveResults, loadMatchesBetween, loadMatch, loadFinished, saveSnapshot, STORE_ON, storeStatus, saveWeekend, loadWeekend } from "./store.js";
 
 export const API_BASE = (process.env.ODDS_API_BASE || "https://odds-api-g6vq.onrender.com").replace(/\/+$/, "");
 export const API_KEY = process.env.ODDS_API_KEY_SPORTY || "";
@@ -388,4 +388,42 @@ export async function getRecord() {
   if (db && db.total) return db;
   const list = [...record.values()].sort((a, b) => b.m.ts - a.m.ts).map((r) => ({ ...r, state: judge(r.pick.k, r.h, r.a, true) }));
   return summarise(list);
+}
+
+// ---------- Weekend (Friday to Sunday): frozen once loaded for the week ----------
+// Loaded the first time anyone asks for it that week, saved to Supabase, and not refreshed until the weekend is over.
+// Kick-off, live score and result come from the live and results feeds, not from this list.
+export const dayKeyOf = (ts) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(ts));
+const shiftKey = (key, n) => { const d = new Date(key + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export function weekendKeys(now = Date.now()) {
+  const today = dayKeyOf(now);
+  const dow = new Date(today + "T12:00:00Z").getUTCDay();   // 0 Sun ... 6 Sat
+  const since = (dow + 2) % 7;                               // days since Friday
+  const fri = since <= 2 ? shiftKey(today, -since) : shiftKey(today, 7 - since);
+  return { weekKey: fri, days: [fri, shiftKey(fri, 1), shiftKey(fri, 2)] };
+}
+
+const weekendMem = { key: "", matches: null };
+export async function getWeekend(weekKey, days) {
+  if (weekendMem.key === weekKey && weekendMem.matches) return weekendMem.matches;
+  let list = await loadWeekend(weekKey);
+  if (!list || !list.length) {
+    const seen = new Map();
+    for (const day of days) {
+      for (let page = 0; page < 5; page++) {
+        try {
+          const q = new URLSearchParams({ date_from: day, date_to: day, limit: "20", offset: String(page * 20) });
+          q.sort();
+          const data = await callOddsApi(`/v1/matches?${q}`, 3600, 86400);
+          for (const raw of data.matches || []) if (raw && raw.id != null) seen.set(Number(raw.id), normMatch(raw));
+          if (!data.has_more) break;
+        } catch (e) { break; }
+      }
+    }
+    list = [...seen.values()].sort((a, b) => a.ts - b.ts);
+    if (list.length) await saveWeekend(weekKey, list);
+  }
+  weekendMem.key = weekKey;
+  weekendMem.matches = list || [];
+  return weekendMem.matches;
 }

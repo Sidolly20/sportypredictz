@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord } from "./data.js";
+import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
@@ -145,8 +145,15 @@ app.get("/football-predictions/:date", route(({ req, ctx, board }) => {
 
 app.get("/predictions", route(({ ctx, board }) => V.hubPage(ctx, { matches: board.matches }), { needsBoard: true }));
 app.get("/predictions/weekend-match-predictions", route(async ({ ctx, board }) => {
+  const { weekKey, days } = weekendKeys();
+  const frozen = await withTimeout(getWeekend(weekKey, days), 20000, []);
+  // Friday to Sunday come from the frozen weekend list; the rest of the board is added as well.
+  const merged = new Map();
+  for (const m of board.matches) merged.set(m.id, m);
+  for (const m of frozen) merged.set(m.id, m);
+  const matches = [...merged.values()].map(ctx.scoresFor);
   const results = (await withTimeout(getResults(), 6000, { results: [] })).results || [];
-  return V.weekendPage(ctx, { matches: board.matches, results });
+  return V.weekendPage(ctx, { matches, results });
 }, { needsBoard: true }));
 app.get("/predictions/:slug", route(({ req, ctx, board }) => {
   const cat = CAT_BY_SLUG[req.params.slug];

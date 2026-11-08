@@ -145,3 +145,24 @@ export async function loadSnapshotNear(leagueId, daysAgo = 7) {
     return rows && rows[0] ? { day: rows[0].snap_day, rows: rows[0].rows } : null;
   } catch (e) { storeStatus.lastError = e.message; return null; }
 }
+
+// ---------- Weekend snapshot: saved once per week, never refreshed until the weekend is over ----------
+// Table (run once in Supabase): create table if not exists weekend_snapshot (week_key text primary key, payload jsonb not null, saved_at timestamptz not null default now());
+export async function saveWeekend(weekKey, matches) {
+  if (!STORE_ON || !matches || !matches.length) return false;
+  try {
+    await sb(`${BASE}/rest/v1/weekend_snapshot?on_conflict=week_key`, {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ week_key: weekKey, payload: matches }])
+    });
+    return true;
+  } catch (e) { storeStatus.lastError = e.message; return false; }
+}
+export async function loadWeekend(weekKey) {
+  if (!STORE_ON) return null;
+  try {
+    const rows = await sb(`${BASE}/rest/v1/weekend_snapshot?week_key=eq.${encodeURIComponent(weekKey)}&select=payload&limit=1`);
+    return rows && rows[0] && Array.isArray(rows[0].payload) ? rows[0].payload : null;
+  } catch (e) { storeStatus.lastError = e.message; return null; }
+}

@@ -1194,3 +1194,54 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .pagehead .chips { justify-content: center; }
 .block-head { justify-content: center; text-align: center; }
 .block-head h2 { margin-left: auto; margin-right: auto; }
+
+/* ================= Weekend match predictions ================= */
+.wk-wrap { max-width: 1100px; margin: 0 auto; padding: 0 14px; }
+.wk-intro { text-align: center; color: var(--mute); max-width: 68ch; margin: 6px auto 18px; font-size: .93rem; line-height: 1.6; }
+.wk-day { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin: 14px 0; }
+.wk-day > header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; margin-bottom: 12px; }
+.wk-day > header h2 { margin: 0; font-size: 1rem; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.wk-date { color: var(--mute); font-size: .78rem; }
+.wk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wk-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; }
+.wk-row > a { display: grid; gap: 2px; min-width: 0; color: var(--text); text-decoration: none; flex: 1; }
+.wk-when { font-size: .7rem; color: var(--mute); letter-spacing: .03em; }
+.wk-teams { font-weight: 700; font-size: .92rem; line-height: 1.3; }
+.wk-teams em { color: var(--mute); font-style: normal; font-weight: 500; }
+.wk-league { font-size: .72rem; color: var(--mute); }
+.wk-pick { flex: none; font-size: .7rem; font-weight: 800; color: #061000; background: var(--acid); border-radius: 99px; padding: 5px 10px; white-space: nowrap; }
+.wk-score { flex: none; font-weight: 900; font-size: 1rem; color: var(--text); white-space: nowrap; }
+.wk-score i { font-style: normal; color: var(--mute); margin: 0 4px; }
+.wk-empty { color: var(--mute); font-size: .86rem; text-align: center; background: var(--panel2); border: 1px dashed var(--line2); border-radius: 13px; padding: 14px; margin: 0; }
+.wk-hot { background: linear-gradient(180deg, rgba(182,255,59,0.07), var(--panel) 60%); border-color: rgba(182,255,59,0.22); }
+.wk-hotgrid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.wk-hotcard { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel2); border: 1px solid rgba(182,255,59,0.20); border-radius: 13px; padding: 11px 12px; }
+.wk-hotcard > a { color: var(--text); text-decoration: none; font-weight: 700; font-size: .9rem; flex: 1; min-width: 0; }
+.wk-hotcard small { display: block; color: var(--mute); font-weight: 500; font-size: .72rem; margin-top: 3px; }
+.wk-faq { margin: 0; text-align: left; }
+.wk-faq dt { font-weight: 800; margin-top: 12px; color: var(--text); }
+.wk-faq dd { margin: 4px 0 0; color: var(--mute); font-size: .9rem; line-height: 1.55; }
+@media (min-width: 760px) {
+  .wk-list { grid-template-columns: 1fr 1fr; }
+  .wk-hotgrid { grid-template-columns: 1fr 1fr; }
+  .wk-day { padding: 20px; }
+}
+
+/* ================= Footer: centred cards with compact links ================= */
+.foot-card { text-align: center; }
+.foot-card .foot-grid { grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 760px) { .foot-card .foot-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.foot-card .foot-brand { text-align: center; }
+.foot-card .foot-brand p { margin-left: auto; margin-right: auto; }
+.foot-card .foot-col { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; }
+.foot-card .foot-col h5 { width: 100%; text-align: center; margin: 0 0 4px; }
+.foot-card .foot-col a { display: inline-block; padding: 5px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel2); font-size: 12px; line-height: 1.2; white-space: nowrap; }
+.foot-card .foot-col a:hover { border-color: var(--acid); }
+.foot-card .foot-bar { flex-direction: column; align-items: center; text-align: center; }
+.foot-card .foot-bar p { margin-left: auto; margin-right: auto; }
+
+/* ================= Category strip: tighter on phones ================= */
+@media (max-width: 760px) {
+  .catbar .catscroll, .catscroll { gap: 5px !important; }
+  .catbar .catscroll > a, .catscroll > a, .catpill { font-size: 11px !important; padding: 5px 9px !important; }
+}
