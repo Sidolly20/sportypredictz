@@ -899,6 +899,27 @@ function leagueFeed(matches) {
     </div>`).join("");
 }
 
+
+// League write-up: plain sentences built from this league's own numbers, plus links to its clubs and
+// the prediction pages that suit it. Thin leagues still get a useful page: the links and method notes carry it.
+function leagueAbout(league, matches, rows) {
+  const parts = [];
+  parts.push(`<p>${esc(league.name)} has ${matches.length ? plural(matches.length, "match") + " to play on our list today and the coming days" : "no matches on our list right now, so the fixtures below will fill in as the feed adds them"}.${rows.length ? ` The table covers ${plural(rows.length, "team")}.` : ""}</p>`);
+  const leader = rows.find((r) => r.pts !== null && r.p);
+  const last = [...rows].reverse().find((r) => r.pts !== null && r.p);
+  if (leader && last && leader !== last) parts.push(`<p>${esc(leader.team)} sit at the top on ${leader.pts} points from ${leader.p} games, while ${esc(last.team)} are at the bottom on ${last.pts}. Form and points move quickly this early in a season, so the table is worth checking against the picks.</p>`);
+  const best = matches.map((m) => ({ m, tp: topPick(m) })).filter((x) => x.tp).sort((a, b) => b.tp.pct - a.tp.pct)[0];
+  if (best) parts.push(`<p>The strongest model read in ${esc(league.name)} right now is ${esc(best.tp.label)} in ${esc(best.m.home.name)} vs ${esc(best.m.away.name)}, at ${Math.round(best.tp.pct)}%. Model chances are estimates, so treat them as a guide, not a guarantee.</p>`);
+  const clubs = TEAMS.filter((t) => matches.some((m) => isClub(m.home.name, t) || isClub(m.away.name, t)) || rows.some((r) => isClub(r.team, t)));
+  const clubLinks = clubs.length ? `<h2>Clubs in ${esc(league.name)}</h2><div class="catgrid small">${clubs.map((t) => `<a class="catcard" href="/team/${t.slug}"><b>${esc(t.name)}</b><span>Upcoming matches and results</span></a>`).join("")}</div>` : "";
+  return `<section class="prose lgb-about"><h2>About ${esc(league.name)} predictions</h2>${parts.join("")}
+    <p>Every pick on this page comes from bookmaker odds with the margin taken out, and a model read of each match. See <a href="/how-we-predict">how we predict</a> for what the model can and cannot do, and the <a href="/track-record">track record</a> for how past picks landed.</p>
+    ${clubLinks}
+    <h2>Predictions to compare for ${esc(league.name)}</h2>
+    <div class="catgrid small"><a class="catcard" href="/predictions/over-2-5-goals"><b>Over 2.5 goals</b><span>Goal-rich matches across all leagues</span></a><a class="catcard" href="/predictions/both-teams-to-score"><b>Both teams to score</b><span>Matches where both sides are likely to score</span></a><a class="catcard" href="/predictions/double-chance"><b>Double chance</b><span>Safer cover on two of three results</span></a><a class="catcard" href="/predictions/banker-picks"><b>Banker picks</b><span>The strongest model reads of the day</span></a><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and final scores</span></a></div>
+  </section>`;
+}
+
 export function leaguePage(ctx, { league, matches, standings, allLeagues, recent = [], snapshot = null }) {
   const path = leaguePath(league);
   const picks = rankPicks("banker-picks", matches).slice(0, 4);
@@ -939,7 +960,8 @@ export function leaguePage(ctx, { league, matches, standings, allLeagues, recent
         <section class="lgb-others"><h2>More leagues</h2><div class="leaguegrid">${allLeagues.filter((l) => l.id !== league.id).slice(0, 10).map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span></a>`).join("")}</div></section>
       </aside>
     </div>
-  </div>`;
+  </div>
+  ${leagueAbout(league, matches, rows)}`;
   return {
     title: `${league.name} Predictions Today: Odds, Tips and Table | ${SITE_NAME}`,
     desc: `${league.name} predictions for ${longDate(Date.now())}: ${st.f.now.length ? `${st.f.now.length} live now, ` : ""}${st.f.today.length || st.f.ahead.length} to play${st.f.best ? `, top pick ${st.f.best.label} (${Math.round(st.f.best.pct)}%)` : ""}. Odds, model chances and the league table.`,
