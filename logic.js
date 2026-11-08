@@ -245,7 +245,7 @@ export function scoreInfo(m, lv, rs, now = Date.now()) {
     const [h, a] = scoreOfRaw(done);
     if (h !== null && a !== null) return { state: "ft", h, a, label: "FT" };
   }
-  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < LIVE_MAX_MS ? "Started" : "Pending" };
+  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < LIVE_MAX_MS ? "Started" : "Result pending" };
   return { state: "pre", h: null, a: null, label: "" };
 }
 
@@ -257,14 +257,17 @@ export function annotate(matches, liveList, resultList, now = Date.now()) {
 
 export const scoreMap = (matches) => Object.fromEntries(matches.filter((m) => m.res && m.res.state !== "pre").map((m) => [m.id, [m.res.state, m.res.h, m.res.a, m.res.label]]));
 
-// Did a pick win? final=true at full time. While live: on/off = winning/losing right now, wait = undecided.
+// Did a pick win? final=true at full time. While a match is still being played, a pick only gets a
+// status when the outcome is already certain (a line already passed, or a result that can no longer change).
+// Everything else reads "In play" until full time, so a 0-0 game never shows "Losing".
 export function judge(k, h, a, final) {
   if (h === null || h === undefined || a === null || a === undefined) return null;
   const t = h + a, draw = h === a;
   const side = { "1": h > a, X: draw, "2": a > h, "1X": h >= a, X2: a >= h, "12": !draw }[k];
-  if (side !== undefined) return final ? (side ? "won" : "lost") : (side ? "on" : "off");
+  if (side !== undefined) return final ? (side ? "won" : "lost") : "wait";
   const line = { "O1.5": 1.5, "O2.5": 2.5, "O3.5": 3.5, "U2.5": 2.5 }[k];
   if (line !== undefined) {
+    // Goals only go up: an Over line once passed is won, an Under line once passed is lost.
     if (k[0] === "O") return t > line ? "won" : final ? "lost" : "wait";
     return t > line ? "lost" : final ? "won" : "wait";
   }

@@ -1,6 +1,6 @@
 // slip.js - the guided AI slip builder page. Asks three tap questions, builds the slip with
 // slip-engine.js (no language model, no paid service), and shows the result in a popup.
-import { buildSlip, swapLeg, shuffleSlip, MODE_TEXT, priceNote, oneIn, thresholdsFor } from "/slip-engine.js";
+import { buildSlip, swapLeg, shuffleSlip, MODE_TEXT, priceNote, oneIn, thresholdsFor, upcoming } from "/slip-engine.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -12,13 +12,14 @@ if (!stage) throw new Error("slip page missing");
 
 const state = {
   data: null, step: 0, answers: { odds: null, day: null, mode: null },
-  busy: false, slip: null, nothing: false, mine: loadBag()
+  busy: false, slip: null, nothing: false, hint: "", mine: loadBag()
 };
 
 function loadBag() { try { return JSON.parse(localStorage.getItem(BAG_KEY) || "[]"); } catch { return []; } }
 function saveBag() { try { localStorage.setItem(BAG_KEY, JSON.stringify(state.mine)); } catch { /* private mode */ } }
+const live = () => upcoming(state.data.matches);
 const opts = () => ({ mode: state.answers.mode, target: +state.answers.odds, day: state.answers.day, today: state.data.today, tomorrow: state.data.tomorrow });
-const countFor = (day) => state.data.matches.filter((m) => (day === "both" ? true : m.d === (day === "today" ? state.data.today : state.data.tomorrow))).length;
+const countFor = (day) => live().filter((m) => (day === "both" ? true : m.d === (day === "today" ? state.data.today : state.data.tomorrow))).length;
 const fmt = (n) => (Number.isFinite(n) ? n.toFixed(2) : "–");
 
 // ---------- stage: questions ----------
@@ -44,7 +45,7 @@ function questionHtml(step) {
 }
 
 const surpriseHtml = () => `<button class="sb-surprise" id="sbSurprise">✦ Surprise me</button>`;
-const typeHtml = () => `<form class="sb-type" id="sbType" autocomplete="off"><label class="sr" for="sbText">Type a question</label><input id="sbText" type="text" maxlength="80" placeholder="Or type, e.g. “3 odds, tomorrow, more”"><button type="submit">Go</button></form>`;
+const typeHtml = () => `<form class="sb-type" id="sbType" autocomplete="off"><label class="sr" for="sbText">Type a question</label><input id="sbText" type="text" maxlength="80" placeholder="Or type, e.g. “3 odds, tomorrow, more”"><button type="submit">Go</button></form>${state.hint ? `<p class="sb-q-sub" style="margin:6px 0 0">${esc(state.hint)}</p>` : ""}`;
 
 function loaderHtml() {
   return `<div class="sb-card sb-loading"><div class="sb-pulse" aria-hidden="true"><i></i><i></i><i></i></div><h2>Building your slip</h2><p class="sb-q-sub" id="sbMsg">Reading the odds…</p></div>`;
@@ -66,7 +67,7 @@ function render() {
     stage.innerHTML = `<div class="sb-card"><h2>Matches are loading</h2><p class="sb-q-sub">Our data source is waking up. Try again in a moment.</p><button class="sb-btn solid" id="sbRetry">Try again</button></div>`;
     return;
   }
-  if (!state.data.matches.length) {
+  if (!live().length) {
     stage.innerHTML = `<div class="sb-card"><h2>No prices yet</h2><p class="sb-q-sub">There are no matches with odds and model chances for today or tomorrow right now. Check back later.</p></div>`;
     return;
   }
@@ -76,6 +77,7 @@ function render() {
 }
 
 function choose(key, val) {
+  state.hint = "";
   state.answers[key] = String(val);
   state.slip = null; state.nothing = false;
   const el = stage.querySelector(`[data-set="${key}"][data-val="${val}"]`);
@@ -96,7 +98,7 @@ function run() {
   setTimeout(() => {
     clearInterval(tick);
     state.busy = false;
-    const r = buildSlip(state.data.matches, opts());
+    const r = buildSlip(live(), opts());
     if (r) { state.slip = r; state.nothing = false; render(); openPopup(); }
     else { state.slip = null; state.nothing = true; render(); }
   }, 1100);
@@ -185,12 +187,12 @@ function toast(msg) {
 }
 
 async function doSwap(legId) {
-  const next = swapLeg(state.data.matches, state.slip, legId, opts());
+  const next = swapLeg(live(), state.slip, legId, opts());
   if (!next) return toast("No safe swap keeps the odds right. Try Shuffle.");
   state.slip = next; refreshPopup(); toast("Game swapped. The rest of the slip stays.");
 }
 async function doShuffle() {
-  const next = shuffleSlip(state.data.matches, state.slip, opts(), Math.random);
+  const next = shuffleSlip(live(), state.slip, opts(), Math.random);
   if (!next) return toast("Nothing else fits right now.");
   state.slip = next; refreshPopup(); toast("Shuffled.");
 }
@@ -241,11 +243,13 @@ stage.addEventListener("click", (e) => {
 stage.addEventListener("submit", (e) => {
   if (!e.target.matches("#sbType")) return;
   e.preventDefault();
-  const p = parseText($("#sbText").value || "");
+  const raw = ($("#sbText").value || "").trim();
+  if (!raw) { state.hint = "Type something like “3 odds, tomorrow, more”, or tap a card above."; return render(); }
+  const p = parseText(raw);
   if (p.surprise) return surprise();
-  if (p.odds) state.answers.odds = p.odds;
-  if (p.day) state.answers.day = p.day;
-  if (p.mode) state.answers.mode = p.mode;
+  if (!p.odds && !p.day && !p.mode) { state.hint = "I didn't catch that. Try “3 odds, tomorrow, more”, or tap a card above."; return render(); }
+  state.hint = "";
+  state.answers = { odds: p.odds || state.answers.odds, day: p.day || state.answers.day, mode: p.mode || state.answers.mode };
   if (state.answers.odds && state.answers.day && state.answers.mode) return run();
   state.nothing = false;
   state.step = !state.answers.odds ? 0 : !state.answers.day ? 1 : 2;

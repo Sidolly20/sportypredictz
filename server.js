@@ -90,10 +90,23 @@ function liveItems(matches, liveList) {
   return (liveList || []).map((l) => byId.get(l.id) || annotate([l], [l], [])[0]);
 }
 
+// Games that kicked off over 100 minutes ago but still have no final score in the live or results lists:
+// ask odds-api for that match directly (at most 8 a page, cached by the odds-api client).
+async function finalScoresFor(matches, liveList, resultList) {
+  const now = Date.now();
+  const stuck = annotate(matches, liveList, resultList).filter((m) => m.res.state === "wait" && m.ts && now - m.ts > 100 * 60e3).slice(0, 8);
+  if (!stuck.length) return [];
+  const got = await Promise.all(stuck.map((m) => withTimeout(getMatch(m.id).catch(() => null), 3000, null)));
+  return got
+    .filter((x) => x && x.score && x.score.home != null && x.score.away != null && (!x.status || /finish|ended|full|^ft$|after/i.test(String(x.status))))
+    .map((x) => ({ id: x.id, score: x.score, status: x.status || "Full time" }));
+}
+
 function route(build, { maxAge = 60, needsBoard = false, needsRecord = false } = {}) {
   return async (req, res) => {
     try {
-      const [board0, live, done] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
+      const [board0, live, done0] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
+      const done = { ...done0, results: [...(done0.results || []), ...(await finalScoresFor(board0.matches, live.matches, done0.results))] };
       const board = { ...board0, matches: annotate(board0.matches, live.matches, done.results) };
       rememberFinished(board.matches);
       const ctx = makeCtx(req, board, live);
@@ -339,7 +352,7 @@ app.get("/api/slip-data", async (req, res, next) => {
     const board = await getBoard();
     const today = todayKey(), tomorrow = addDays(today, 1);
     const matches = board.matches
-      .filter((m) => m.odds && m.prediction && (!m.res || m.res.state === "pre") && [today, tomorrow].includes(dayKeyOf(m.ts)))
+      .filter((m) => m.odds && m.prediction && (!m.res || m.res.state === "pre") && m.ts - Date.now() > 15 * 60 * 1000 && [today, tomorrow].includes(dayKeyOf(m.ts)))
       .map((m) => ({ id: m.id, lg: m.league?.name || "", h: m.home.name, a: m.away.name, t: m.kickoff || new Date(m.ts).toISOString(), d: dayKeyOf(m.ts), o: keep(m.odds, SLIP_ODDS), p: keep(m.prediction, SLIP_PRED) }));
     res.set("Cache-Control", "public, max-age=120").json({ today, tomorrow, demo: !!DEMO, updatedAt: board.updatedAt, matches });
   } catch (e) { next(e); }
