@@ -200,7 +200,11 @@ export async function getLive() {
     // If the feed says otherwise, the entry is old and is ignored.
     // odds-api tells us when its live copy was last refreshed. If that copy is older than 2 minutes, it is stale: ignore it.
     const fresh = !d.updated_at || Date.now() - Date.parse(d.updated_at) < 120 * 1000;
-    const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter((m) => !m.ts || Date.now() - m.ts < 2.75 * 3600e3) : [];
+    // A match is only LIVE once its kick-off time has passed AND the feed gives it a minute or a score.
+    // Anything else in the feed (not started yet, or no clock) is left out, so it shows as Started/Pending.
+    const playing = (m) => m.ts && Date.now() >= m.ts && Date.now() - m.ts < 2.75 * 3600e3 &&
+      ((m.minute != null && m.minute !== "") || (m.score && m.score.home != null));
+    const matches = fresh ? (d.matches || []).map(normMatch).map(matchToBoard).filter(playing) : [];
     hydrateStarted(matches);
     // Shown on /api/status so we can see WHY a started match has no score (no keys in it).
     status.live = { at: new Date().toISOString(), source: d.source ?? null, count: matches.length, withScore: matches.filter((m) => m.score && m.score.home != null).length, odds_api_says: d.diag ?? null, ignoredAsOld: !fresh };
