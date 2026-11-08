@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
+import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf, callOddsApi } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
@@ -250,6 +250,19 @@ app.get("/api/debug/standings/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: "id must be a number" });
   try { res.json(await standingsShape(id)); }
+  catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
+});
+
+// Temporary diagnostics: the raw odds-api answer for one match and for the results list (no keys in them).
+// Open /api/debug/match/<id> for a finished match that shows no score, and /api/debug/results for the list.
+app.get("/api/debug/match/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "id must be a number" });
+  try { res.json(await callOddsApi(`/v1/matches/${id}?include=odds,prediction`, 30)); }
+  catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
+});
+app.get("/api/debug/results", async (req, res) => {
+  try { res.json(await callOddsApi("/v1/results?limit=50", 30)); }
   catch (err) { res.status(502).json({ error: err instanceof UpstreamError ? `odds-api answered ${err.code}` : err.message }); }
 });
 
