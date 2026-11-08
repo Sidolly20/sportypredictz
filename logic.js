@@ -398,6 +398,8 @@ function dcPick(m, k, min) {
   return d && num(d.pct) !== null && d.pct >= min ? item(m, k, d.pick, d.pct, d.odd, true) : null;
 }
 
+// How many picks each category shows, strongest first. Draws and the 3.5-goal markets are rare, so they show fewer.
+export const PICK_CAP = { draws: 7, "over-3-5-goals": 7 };
 export function rankPicks(slug, matches) {
   const fn = PICKERS[slug];
   if (!fn) return [];
@@ -407,13 +409,14 @@ export function rankPicks(slug, matches) {
     if (it) out.push(it);
   }
   out.sort(slug === "value-bets" ? (a, b) => b.edge - a.edge : (a, b) => b.pct - a.pct || a.m.ts - b.m.ts);
+  const cap = PICK_CAP[slug] ?? (slug === "banker-picks" || slug === "value-bets" ? Infinity : 15);
   if (slug === "value-bets" && !out.length) {
     // Nothing clearly beats the market. Show the closest ones, and say so on the page.
     const near = [];
     for (const m of matches) if (!m.res || m.res.state === "pre") { const it = valuePick(m, -0.05); if (it) { it.weak = true; near.push(it); } }
     return near.sort((a, b) => b.edge - a.edge).slice(0, 10);
   }
-  return out;
+  return out.slice(0, cap);
 }
 
 // Accumulator builder: stack the most likely picks until the total odds reach the target.

@@ -2,7 +2,7 @@
 
 import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
-  matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick
+  matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick, PLAY_MS
 , kickLabel} from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
 
@@ -111,7 +111,9 @@ const plural = (n, w) => `${n} ${n === 1 ? w : w === "match" ? "matches" : w + "
 const avgPct = (items) => items.length ? Math.round(items.reduce((a, b) => a + b.pct, 0) / items.length) : null;
 function leagueFacts(league, matches, ctx, standings) {
   const name = league.name;
-  const now = matches.filter((m) => resOf(m).state === "live" || resOf(m).state === "wait");
+  const playing = (m) => resOf(m).state === "live" || (resOf(m).state === "wait" && m.ts && Date.now() - m.ts < PLAY_MS);
+  const now = matches.filter(playing);
+  const checking = matches.filter((m) => resOf(m).state === "wait" && !playing(m));
   const done = matches.filter((m) => resOf(m).state === "ft");
   const ahead = matches.filter((m) => resOf(m).state === "pre");
   const today = ahead.filter((m) => dayKey(m.ts) === todayKey());
@@ -121,7 +123,7 @@ function leagueFacts(league, matches, ctx, standings) {
   const recs = ((ctx.record && ctx.record.list) || []).filter((r) => r.m.league.name === name);
   const won = recs.filter((r) => r.state === "won").length;
   const lead = standings && standings.groups && standings.groups[0] && standings.groups[0].rows[0];
-  return { name, now, done, ahead, today, best, o25, bt, recs, won, lead };
+  return { name, now, checking, done, ahead, today, best, o25, bt, recs, won, lead };
 }
 // Same facts, different wording: the variant is picked from a seed (league + day + what is happening),
 // so a page reads the same on every refresh but differs between leagues and between days.
@@ -281,6 +283,7 @@ const lgNote = (g) => {
   const bits = [];
   if (f.now.length) bits.push(`<b class="hot">${f.now.length} live</b>`);
   if (f.done.length) bits.push(`${f.done.length} finished`);
+  if (f.checking.length) bits.push(`${f.checking.length} awaiting result`);
   if (f.ahead.length) bits.push(`${f.ahead.length} to play`);
   if (f.best) bits.push(`top pick <b>${esc(f.best.label)}</b> ${Math.round(f.best.pct)}%`);
   return bits.length ? `<p class="lgnote">${bits.join(" · ")}</p>` : "";
@@ -717,6 +720,7 @@ export function categoryPage(ctx, { cat, matches }) {
   const others = CATEGORIES.filter((c) => c.slug !== cat.slug && (c.group === cat.group || c.featured)).slice(0, 8);
   let list = "";
   let count = 0;
+  let thin = false;
   const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
   if (cat.kind === "acca-hub") {
     const four = CATEGORIES.filter((c) => c.kind === "acca");
@@ -730,6 +734,8 @@ export function categoryPage(ctx, { cat, matches }) {
   } else {
     const items = rankPicks(cat.slug, matches).slice(0, 40);
     count = items.length;
+    // Fewer than 3 picks is too little for a search page: keep it live for visitors but out of Google's index.
+    thin = items.length < 3;
     const weak = items.length && items.every((x) => x.weak);
     const byDay = new Map();
     const order = (it) => (it.m.res?.state === "live" ? 0 : it.m.res?.state === "ft" ? 2 : 1);
@@ -750,9 +756,10 @@ export function categoryPage(ctx, { cat, matches }) {
   ${list}
   <section class="prose"><h2>About ${esc(cat.name.toLowerCase())}</h2>${cat.intro.map((p) => `<p>${esc(p)}</p>`).join("")}</section>
   <section class="block"><div class="block-head"><h2>More prediction types</h2></div><div class="catgrid small">${others.map((c) => `<a class="catcard" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>${esc(c.short)}</span></a>`).join("")}</div></section>
+  <section class="block"><div class="block-head"><h2>Keep browsing</h2></div><div class="catgrid small"><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/football-predictions-tomorrow"><b>Tomorrow's predictions</b><span>Every match on tomorrow's list</span></a><a class="catcard" href="/predictions/weekend-match-predictions"><b>Weekend picks</b><span>Friday to Sunday match predictions</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and how picks landed</span></a><a class="catcard" href="/track-record"><b>Track record</b><span>Every settled pick the site keeps</span></a><a class="catcard" href="/leagues"><b>All leagues</b><span>Tables and predictions by league</span></a></div></section>
   ${faqHtml(cat.faq)}`;
   return {
-    title: cat.title + ` | ${SITE_NAME}`, desc: cat.desc, path, body,
+    title: cat.title + ` | ${SITE_NAME}`, desc: cat.desc, path, body, noindex: thin,
     ld: [crumbLd(ctx.origin, [["Home", "/"], ["Predictions", "/predictions"], [cat.name, path]]), faqLd(cat.faq)]
   };
 }
