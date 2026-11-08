@@ -1142,3 +1142,23 @@ details.v4-more[open] > summary::after { content: "–"; }
   .spot-pick b { font-size: .78rem; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .spot-pick em { font-size: .72rem; }
 }
+
+/* ---- Betting categories: show them all at a glance on phones (wrap into rows, no sideways slide) ---- */
+@media (max-width: 760px) {
+  .catscroll, .catbar {
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    justify-content: center;
+    gap: 6px !important;
+    padding: 8px 8px !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  .catscroll > *, .catbar > * {
+    flex: 0 0 auto !important;
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    padding: 6px 10px !important;
+    white-space: nowrap;
+  }
+}
