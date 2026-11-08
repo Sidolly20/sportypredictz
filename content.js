@@ -353,7 +353,24 @@ export const CATEGORIES = [
       ["Does the acca change during the day?", "Yes. If a match kicks off or the odds move, it is rebuilt on the next refresh. Tap Add all to pick slip to lock in what you see."],
       ["Is an acca a good idea?", "Every extra leg lowers your chance of winning. Treat it as a small-stake bet and never chase losses with it."]
     ]
-  }
+  },
+  {
+    slug: "under-3-5-goals", group: "Goals",
+    name: "Under 3.5 goals",
+    short: "Tight games where three goals or fewer is the likely outcome.",
+    title: "Under 3.5 Goals Predictions Today: Low-Scoring Football Tips",
+    desc: "Under 3.5 goals predictions: matches where the model gives a 60% chance or better of three goals or fewer, with odds.",
+    h1: "Under 3.5 goals predictions",
+    intro: [
+      "Under 3.5 means three goals or fewer in the whole match. It is the safer side of the over 3.5 bet, and it wins in every game that finishes 2-1, 1-1, 2-0 or 1-0.",
+      "We list the upcoming matches where the model gives under 3.5 a 60% chance or better. Check the open match page for the expected goals on each side before you add one to your slip."
+    ],
+    faq: [
+      ["What does under 3.5 goals mean?", "Three goals or fewer in total in normal time. A 2-1 result is under 3.5. A 3-1 result is over."],
+      ["How is it different from under 2.5?", "Under 2.5 loses to a 2-1 win, but under 3.5 wins it. Under 3.5 is the more forgiving line."],
+      ["Does stoppage time count?", "Yes. Goals in added time count, and extra time in a cup match does not."]
+    ]
+  },
 ];
 
 export const CAT_BY_SLUG = Object.fromEntries(CATEGORIES.map((c) => [c.slug, c]));

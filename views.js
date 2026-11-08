@@ -3,7 +3,7 @@
 import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
   matchPath, leaguePath, marketsOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick
-} from "./logic.js";
+, kickLabel} from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis } from "./content.js";
 
 // Optional analytics (GoatCounter: no cookies, counts visits only). Off unless GOATCOUNTER_CODE is set in Render.
@@ -18,7 +18,7 @@ const lgIcon = (lg) => {
   const fb = esc(initials(lg.name));
   return lg.logo ? `<img class="lgi" src="${esc(lg.logo)}" alt="" loading="lazy" width="22" height="22" data-fb="${fb}">` : `<span class="lg-fb">${fb}</span>`;
 };
-const timeEl = (m, cls = "when") => `<time class="${cls}" datetime="${esc(m.kickoff || "")}" data-t="hm">${clock(m.ts)}</time>`;
+const timeEl = (m, cls = "when") => `<time class="${cls}" datetime="${esc(m.kickoff || "")}" data-t="hm">${kickLabel(m.ts)}</time>`;
 
 // Score + status helpers. state: pre | live | ft | wait. The browser keeps these fresh (see app.js).
 const RES0 = { state: "pre", h: null, a: null, label: "" };
@@ -33,7 +33,7 @@ const pstEl = (m, k) => {
 function whenEl(m, k, withChip = true) {
   const r = resOf(m);
   const top = r.state === "pre"
-    ? `<time class="w-top" datetime="${esc(m.kickoff || "")}" data-t="hm">${clock(m.ts)}</time>`
+    ? `<time class="w-top" datetime="${esc(m.kickoff || "")}" data-t="hm">${kickLabel(m.ts)}</time>`
     : `<span class="w-top">${esc(r.label)}</span>`;
   return `<span class="when">${top}${withChip ? pstEl(m, k) : ""}</span>`;
 }
@@ -612,6 +612,64 @@ export function hubPage(ctx, { matches }) {
   return { title: `Football Predictions by Bet Type | ${SITE_NAME}`, desc: "Browse football predictions by bet type: banker picks, home wins, away wins, draws, over/under 2.5 goals, both teams to score, double chance, value bets and accumulator tips.", path: "/predictions", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Predictions", "/predictions"]])] };
 }
 
+// Weekend match predictions: Friday, Saturday and Sunday, with hot picks.
+// Never empty: if the weekend is thin it adds the coming week, and if no fixtures are loaded it shows last weekend's results.
+export function weekendPage(ctx, { matches, results = [] }) {
+  const path = "/predictions/weekend-match-predictions";
+  const today = todayKey();
+  const dow = new Date(today + "T12:00:00Z").getUTCDay();   // 0 Sun ... 6 Sat
+  const since = (dow + 2) % 7;                               // days since Friday: Fri 0, Sat 1, Sun 2, Mon 3 ... Thu 6
+  const fri = since <= 2 ? addDays(today, -since) : addDays(today, 7 - since);
+  const weekend = [fri, addDays(fri, 1), addDays(fri, 2)];
+  const names = ["Friday", "Saturday", "Sunday"];
+  const now = Date.now();
+  const upcoming = (m) => m.ts && m.ts >= now - 3 * 3600e3 && (!m.res || m.res.state === "pre");
+  const row = (m) => {
+    const tp = topPick(m);
+    return `<li><a href="${matchPath(m)}"><time>${esc(kickLabel(m.ts))}</time> ${esc(m.home.name)} v ${esc(m.away.name)}</a><span class="muted"> · ${esc(m.league.name)}${tp ? ` · ${esc(tp.label)} ${Math.round(tp.pct)}%` : ""}</span></li>`;
+  };
+  const dayList = weekend.map((k) => matches.filter((m) => upcoming(m) && dayKey(m.ts) === k).sort((a, b) => a.ts - b.ts));
+  const weekendCount = dayList.reduce((n, a) => n + a.length, 0);
+  const nextWeek = weekendCount === 0 || weekendCount < 3
+    ? matches.filter((m) => upcoming(m) && !weekend.includes(dayKey(m.ts)) && dayKey(m.ts) > today && dayKey(m.ts) <= addDays(today, 7)).sort((a, b) => a.ts - b.ts).slice(0, 12)
+    : [];
+  const hot = [...dayList.flat(), ...nextWeek]
+    .filter((m) => m.prediction && topPick(m) && topPick(m).pct >= 65)
+    .sort((a, b) => topPick(b).pct - topPick(a).pct).slice(0, 8);
+  const lastWeekend = [addDays(fri, -7), addDays(fri, -6), addDays(fri, -5)];
+  const lastResults = weekendCount === 0 && nextWeek.length === 0
+    ? results.filter((r) => r.score && r.score.home != null && lastWeekend.includes(dayKey(r.ts))).sort((a, b) => b.ts - a.ts).slice(0, 24)
+    : [];
+
+  const dayBlocks = weekend.map((k, i) => {
+    const list = dayList[i];
+    return `<section class="block"><h2>${names[i]} match predictions</h2><p class="muted">${esc(longDate(keyToTs(k)))}</p>${list.length
+      ? `<ul class="wk-list">${list.map(row).join("")}</ul>`
+      : `<p>No ${names[i]} fixtures are loaded yet. They appear here as soon as they are added, so check back.</p>`}</section>`;
+  }).join("");
+  const hotBlock = `<section class="block"><h2>Hot picks this weekend</h2>${hot.length
+    ? `<ul class="wk-list">${hot.map(row).join("")}</ul>`
+    : `<p>Hot picks appear here as soon as the model rates a match strongly enough. Below are the next fixtures.</p>`}</section>`;
+  const comingBlock = nextWeek.length && weekendCount < 3
+    ? `<section class="block"><h2>Coming up this week</h2><p class="muted">The weekend is still filling in, so here are the next matches with tips.</p><ul class="wk-list">${nextWeek.map(row).join("")}</ul></section>` : "";
+  const lastBlock = lastResults.length
+    ? `<section class="block"><h2>Last weekend's results</h2><p class="muted">The most recent weekend's final scores, while this weekend's fixtures load.</p><ul class="wk-list">${lastResults.map((r) => `<li><a href="${matchPath(r)}">${esc(r.home.name)} ${r.score.home}-${r.score.away} ${esc(r.away.name)}</a><span class="muted"> · ${esc(r.league.name)}</span></li>`).join("")}</ul></section>` : "";
+
+  const intro = `<section class="block"><p>Weekend football is the busiest time of the week, so this page gathers every Friday, Saturday and Sunday match we have predictions for. Each game shows its date and kick-off time, the model's most likely result, and the odds, so you can judge the price yourself.</p><p>Hot picks are the matches where the model is most confident. A high percentage is not a guarantee, so treat these as tips to weigh, not sure things.</p></section>`;
+  const faq = `<section class="block"><h2>Weekend predictions FAQ</h2><dl>
+    <dt>When does the weekend start?</dt><dd>Friday. The page covers Friday, Saturday and Sunday, and on Monday to Thursday it shows the coming weekend.</dd>
+    <dt>Why are some days empty?</dt><dd>Fixtures are added as the league schedules are confirmed. If a day is empty, the page shows the coming week or the last weekend's results instead.</dd>
+    <dt>What is a hot pick?</dt><dd>A match where the model's top result has a 65% chance or better. Open the match page for the full breakdown.</dd>
+  </dl></section>`;
+  return {
+    title: `Weekend Match Predictions: Friday, Saturday and Sunday Tips | ${SITE_NAME}`,
+    desc: "Friday, Saturday and Sunday football match predictions with hot picks, model chances, kick-off times and odds.",
+    path,
+    body: pageHead("Weekend match predictions", "Hot picks and every Friday, Saturday and Sunday match, with model chances, kick-off times and odds.") + intro + hotBlock + comingBlock + dayBlocks + lastBlock + faq,
+    ld: [crumbLd(ctx.origin, [["Home", "/"], ["Predictions", "/predictions"], ["Weekend match predictions", path]])]
+  };
+}
+
 export function categoryPage(ctx, { cat, matches }) {
   const path = `/predictions/${cat.slug}`;
   const others = CATEGORIES.filter((c) => c.slug !== cat.slug && (c.group === cat.group || c.featured)).slice(0, 8);
@@ -731,7 +789,7 @@ function leagueFeedItem(m) {
   const mk = marketsOf(m);
   const pct = tp ? Math.round(tp.pct) : null;
   return `<a class="lgb-fx" href="${matchPath(m)}">
-    <span class="lgb-time">${clock(m.ts)}</span>
+    <span class="lgb-time">${kickLabel(m.ts)}</span>
     <span class="lgb-teams"><span>${crest(m.home)}${esc(m.home.name)}</span><span>${crest(m.away)}${esc(m.away.name)}</span></span>
     <span class="lgb-read">${splitBar(mk) || ""}${tp ? `<span class="lgb-pick"><small>Model</small>${esc(tp.label)} <b>${pct}%</b></span>` : `<span class="lgb-pick none">No clear pick</span>`}</span>
     <span class="lgb-go" aria-hidden="true">›</span>
@@ -930,7 +988,7 @@ function leagueModules(league, matches, standings, ctx) {
     const toss = withP.filter((m) => Math.max(num(m.prediction.home_win_pct) || 0, num(m.prediction.away_win_pct) || 0, num(m.prediction.draw_pct) || 0) < 45).length;
     const fx = withP.slice(0, 6).map((m) => {
       const p = m.prediction; const h = num(p.home_win_pct) || 0, d = num(p.draw_pct) || 0, a = num(p.away_win_pct) || 0; const t = h + d + a || 1;
-      return `<div class="v4-fx"><div class="v4-fx-head"><span>${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><small class="mono">${esc(clock(m.ts))}</small></div><div class="v4-chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div><div class="v4-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
+      return `<div class="v4-fx"><div class="v4-fx-head"><span>${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><small class="mono">${esc(kickLabel(m.ts))}</small></div><div class="v4-chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div><div class="v4-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
     }).join("");
     add("model", strong >= 2 || toss >= 2 ? 6 : 3, modHtml("model", "Model chances", String(strong), "games with a side at 60%+", fx));
   }
@@ -1113,7 +1171,7 @@ const LEAGUE_LAYOUTS = [
       return `<div class="v4-fixtures">${list.map((m) => {
         const p = m.prediction, h = num(p.home_win_pct) || 0, d = num(p.draw_pct) || 0, a = num(p.away_win_pct) || 0, t = h + d + a || 1, top = Math.max(h, d, a);
         const tag = top < 45 ? `<em class="v4-tag toss">coin toss</em>` : top >= 60 ? `<em class="v4-tag sure">one-sided</em>` : "";
-        return `<div class="v4-fxc"><div class="v4-fxh"><span>${esc(m.home.name)} <i>v</i> ${esc(m.away.name)}</span><small class="mono">${esc(clock(m.ts))}</small></div>${tag}<div class="v4-chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div><div class="v4-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
+        return `<div class="v4-fxc"><div class="v4-fxh"><span>${esc(m.home.name)} <i>v</i> ${esc(m.away.name)}</span><small class="mono">${esc(kickLabel(m.ts))}</small></div>${tag}<div class="v4-chance"><i class="h" style="width:${((h / t) * 100).toFixed(1)}%"></i><i class="d" style="width:${((d / t) * 100).toFixed(1)}%"></i><i class="a" style="width:${((a / t) * 100).toFixed(1)}%"></i></div><div class="v4-legend"><span>${Math.round(h)}% ${esc(abbr(m.home.name))}</span><span>${Math.round(d)}% X</span><span>${Math.round(a)}% ${esc(abbr(m.away.name))}</span></div></div>`;
       }).join("")}</div>${capFx}`;
     } },
 ];

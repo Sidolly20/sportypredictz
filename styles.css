@@ -1143,18 +1143,34 @@ details.v4-more[open] > summary::after { content: "–"; }
   .spot-pick em { font-size: .72rem; }
 }
 
-/* ---- Betting categories: show them all at a glance on phones (wrap into rows, no sideways slide) ---- */
+/* ---- Betting categories on phones: wrap into rows, never slide sideways, page never scrolls sideways ---- */
+html, body { overflow-x: hidden; max-width: 100%; }
 @media (max-width: 760px) {
-  .catscroll, .catbar {
-    flex-wrap: wrap !important;
+  nav.catbar, .catbar {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: visible !important;
-    justify-content: center;
-    gap: 6px !important;
-    padding: 8px 8px !important;
+    box-sizing: border-box;
+    padding: 6px 8px !important;
     -webkit-mask-image: none !important;
     mask-image: none !important;
   }
-  .catscroll > *, .catbar > * {
+  .catbar .catscroll, .catscroll {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    gap: 6px !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  .catscroll > a, .catscroll > button, .catpill {
     flex: 0 0 auto !important;
     font-size: 12px !important;
     line-height: 1.2 !important;

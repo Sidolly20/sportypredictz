@@ -33,6 +33,8 @@ export const dayKey = (ts) => dayFmt.format(new Date(ts));
 export const clock = (ts) => clockFmt.format(new Date(ts));
 export const longDate = (ts) => longFmt.format(new Date(ts));
 export const shortDate = (ts) => shortFmt.format(new Date(ts));
+// Date and time for match cards: "Sat 8 Nov · 20:00" (West Africa Time), so finished, live and upcoming games are all dated.
+export const kickLabel = (ts) => `${shortDate(ts)} · ${clock(ts)}`;
 export const todayKey = () => dayKey(Date.now());
 export const addDays = (key, n) => {
   const d = new Date(`${key}T12:00:00Z`);
@@ -166,7 +168,8 @@ export function marketsOf(m) {
       { k: "O1.5", label: "Over 1.5", odd: o.over_15_goals, pick: "Over 1.5 goals", pct: p.over_15_pct },
       { k: "O2.5", label: "Over 2.5", odd: o.over_25_goals, pick: "Over 2.5 goals", pct: p.over_25_pct },
       { k: "U2.5", label: "Under 2.5", odd: o.under_25_goals, pick: "Under 2.5 goals", pct: num(p.over_25_pct) === null ? null : 100 - p.over_25_pct },
-      { k: "O3.5", label: "Over 3.5", odd: o35ok ? o.over_35_goals : null, pick: "Over 3.5 goals", pct: o35ok ? p.over_35_pct : null }
+      { k: "O3.5", label: "Over 3.5", odd: o35ok ? o.over_35_goals : null, pick: "Over 3.5 goals", pct: o35ok ? p.over_35_pct : null },
+      { k: "U3.5", label: "Under 3.5", odd: o.under_35_goals ?? null, pick: "Under 3.5 goals", pct: num(p.over_35_pct) === null ? null : 100 - p.over_35_pct }
     ],
     btts: [
       { k: "GG", label: "Both score", odd: o.btts_yes, pick: "Both teams to score", pct: p.btts_yes_pct },
@@ -341,6 +344,12 @@ export const PICKERS = {
   "over-1-5-goals": (m) => {
     const pct = num(m.prediction?.over_15_pct);
     return pct !== null && pct >= 78 ? item(m, "O1.5", "Over 1.5 goals", pct, m.odds?.over_15_goals) : null;
+  },
+  "under-3-5-goals": (m) => {
+    const pct = num(m.prediction?.over_35_pct);
+    const pc = pct === null ? null : 100 - pct;
+    const d = marketsOf(m).goals.find((x) => x.k === "U3.5");
+    return d && d.odd && pc !== null && pc >= 60 ? item(m, "U3.5", "Under 3.5 goals", pc, d.odd) : null;
   },
   "over-3-5-goals": (m) => {
     const pct = num(m.prediction?.over_35_pct);

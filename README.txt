@@ -1,20 +1,23 @@
-ALL FIXES - one zip
+NEXT FIX - one zip (SportyPredictz repo, root folder)
 
-Copy each file into the matching place in your GitHub repo (replace the old file), then commit.
+Replace these files in the root of the repo, then commit:
+  logic.js     - Under 3.5 market and picker; date labels for cards
+  content.js   - Under 3.5 goals category (new)
+  server.js    - weekend page route, sitemap entries, thin-page rules
+  views.js     - weekend page layout, date labels on cards
+  styles.css   - betting categories wrap on phones (no sideways slide)
+  data.js      - live: games show once kick-off has passed
 
-odds-api repo
-  odds-api/lib/bzz.js                 -> lib/bzz.js                 (daily Bzzoiro cap + usage counter)
-  odds-api/lib/footballDataLive.js    -> lib/footballDataLive.js    (football-data finished matches backup)
-  odds-api/routes/results.js          -> routes/results.js          (results with football-data backup)
+What is new
+  /predictions/weekend-match-predictions   Friday, Saturday, Sunday match predictions, hot picks,
+                                           fallbacks (coming week, then last weekend's results)
+  /predictions/under-3-5-goals             new category
+  Date and time on every match card
 
-SportyPredictz repo (root folder)
-  sportypredictz/data.js              -> data.js                    (live only after kick-off + minute/score; backup results mapped by name)
-  sportypredictz/views.js             -> views.js                   (live cards are not links)
+Indexing rules
+  - Tip pages with no picks are marked noindex until they have content.
+  - Sitemap lists only matches that have a prediction and odds.
+  - Match pages without a prediction are already noindex.
 
-Not included on purpose:
-  - league order change (logic.js): not part of this set; ask first.
-  - per-match Bzzoiro call reduction (routes/matches.js): needs your usage numbers first.
-
-After deploying:
-  - odds-api: open yoursite/api/status and check bzzoiro.calls_today and daily_cap.
-  - SportyPredictz: check Live page counts only started games; check Results page.
+Not included: Over 0.5 (the odds feed does not carry that price yet).
+Over 1.5 and Over 3.5 already exist as pages.

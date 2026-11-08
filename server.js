@@ -10,7 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord } from "./data.js";
-import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap } from "./logic.js";
+import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
@@ -144,9 +144,18 @@ app.get("/football-predictions/:date", route(({ req, ctx, board }) => {
 }, { needsBoard: true }));
 
 app.get("/predictions", route(({ ctx, board }) => V.hubPage(ctx, { matches: board.matches }), { needsBoard: true }));
+app.get("/predictions/weekend-match-predictions", route(async ({ ctx, board }) => {
+  const results = (await withTimeout(getResults(), 6000, { results: [] })).results || [];
+  return V.weekendPage(ctx, { matches: board.matches, results });
+}, { needsBoard: true }));
 app.get("/predictions/:slug", route(({ req, ctx, board }) => {
   const cat = CAT_BY_SLUG[req.params.slug];
-  return cat ? V.categoryPage(ctx, { cat, matches: board.matches }) : null;
+  if (!cat) return null;
+  const page = V.categoryPage(ctx, { cat, matches: board.matches });
+  // Thin page: a tip page with no picks yet is kept out of Google until it has real content.
+  const picks = cat.kind === "acca" || cat.kind === "acca-hub" ? null : rankPicks(cat.slug, board.matches).filter((x) => !x.weak).length;
+  if (page && picks === 0) page.noindex = true;
+  return page;
 }, { needsBoard: true }));
 
 app.get("/leagues", route(({ ctx, board }) => {
@@ -245,10 +254,11 @@ app.get("/sitemap.xml", async (req, res) => {
   const urls = [
     ["/", 1.0], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
     ...CATEGORIES.map((c) => [`/predictions/${c.slug}`, 0.8]),
+    ["/predictions/weekend-match-predictions", 0.9],
     ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6],
     ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
     ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
-    ...board.matches.filter((m) => m.prediction && m.res?.state !== "live").slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
+    ...board.matches.filter((m) => m.prediction && m.odds?.home_win && m.res?.state !== "live").slice(0, 400).map((m) => [matchPath(m), 0.5, dayKey(m.ts)])
   ];
   const day = today;
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([p, pr, lm]) => `<url><loc>${origin}${p}</loc><lastmod>${lm || day}</lastmod><priority>${pr}</priority></url>`).join("\n")}\n</urlset>`);
