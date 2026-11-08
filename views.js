@@ -483,17 +483,17 @@ ${o.body}
 </aside>
 <button type="button" class="slip-fab" id="slipFab" hidden><span>Pick slip</span><b id="fabCount">0</b><span class="mono" id="fabOdds">0.00</span></button>
 <div class="scout" id="scout">
-  <a class="scout-bubble" id="scoutBubble" href="/build-slip">Build an AI slip <b aria-hidden="true">→</b></a>
-  <button type="button" class="scout-fab scout-blink" id="scoutFab" aria-expanded="false" aria-controls="scoutPanel" aria-label="Open Scout, the AI football prediction helper"><img src="/assets/scout-logo.svg" width="34" height="34" alt=""><span>Scout AI</span><i class="scout-dot" aria-hidden="true"></i></button>
-  <section class="scout-panel" id="scoutPanel" aria-label="Scout AI helper" hidden>
+  <section class="scout-panel" id="scoutPanel" aria-label="Scout FAQ" hidden>
     <header class="scout-head"><div class="scout-id"><img src="/assets/scout-logo.svg" width="34" height="34" alt=""><div><b>Scout</b><small>AI helper · 18+ · no guarantees</small></div></div><button type="button" class="scout-x" id="scoutX" aria-label="Close Scout">×</button></header>
     <div class="scout-log" id="scoutLog" aria-live="polite"></div>
     <div class="scout-chips" id="scoutChips"></div>
     <form class="scout-ask" id="scoutForm" autocomplete="off"><label class="sr" for="scoutInput">Ask Scout a question</label><input id="scoutInput" type="text" maxlength="160" placeholder="Type a question…"><button type="submit">Ask</button></form>
   </section>
+  <button type="button" class="scout-faq" id="scoutFab" aria-expanded="false" aria-controls="scoutPanel">FAQ</button>
+  <a class="scout-go scout-blink" href="/build-slip" aria-label="Open the AI slip builder"><img src="/assets/scout-logo.svg" width="52" height="52" alt=""></a>
 </div>
 <script src="/app.js?v=${ctx.v}" defer></script>
-<script src="/scout.js?v=${ctx.v}" defer></script>
+<script type="module" src="/scout.js?v=${ctx.v}"></script>
 ${GC_CODE ? `<script data-goatcounter="https://${GC_CODE}.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>` : ""}
 </body>
 </html>`;
@@ -1548,9 +1548,8 @@ export function warmingPage() {
 
 export function slipPage(ctx) {
   const path = "/build-slip";
-  const body = `${crumbs([["Home", "/"], ["AI slip builder", path]])}
-<section class="sb-wrap" aria-labelledby="sbTitle">
-  <header class="sb-hero"><img src="/assets/scout-logo.svg" width="56" height="56" alt=""><div><span class="sb-kick">AI slip builder</span><h1 id="sbTitle">Build an AI football slip in three taps</h1><p>Pick the odds, the day and the style. The model builds the slip from today's and tomorrow's matches, and shows you its reasons.</p></div></header>
+  const body = `<section class="sb-wrap" aria-labelledby="sbTitle">
+  <header class="sb-hero"><img src="/assets/scout-logo.svg" width="36" height="36" alt=""><div><h1 id="sbTitle">AI slip builder</h1><p>Three taps. The model shows you why.</p></div></header>
   <div id="slipStage" class="sb-stage" aria-live="polite"><p class="sb-q-sub">Loading matches…</p></div>
   <div id="mySlip" class="sb-mine"></div>
   <section class="prose sb-seo">

@@ -28,19 +28,19 @@ function chipsHtml() {
   if (a.odds) chips.push(`<button class="sb-chip" data-jump="0">${a.odds} odds</button>`);
   if (a.day) chips.push(`<button class="sb-chip" data-jump="1">${DAY[a.day]}</button>`);
   if (a.mode) chips.push(`<button class="sb-chip" data-jump="2">${MODE_TEXT[a.mode].title}</button>`);
-  return chips.length ? `<div class="sb-chips" aria-label="Your answers, tap one to change it">${chips.join("")}</div>` : `<div class="sb-chips sb-chips-empty">Answer three quick questions</div>`;
+  return chips.length ? `<div class="sb-chips" aria-label="Your answers, tap one to change it">${chips.join("")}</div>` : "";
 }
 const progressHtml = () => `<div class="sb-dots" aria-hidden="true">${[0, 1, 2].map((i) => `<i class="${i < state.step ? "done" : i === state.step ? "on" : ""}"></i>`).join("")}</div>`;
 const backHtml = () => (state.step > 0 ? `<button class="sb-back" id="sbBack">← Back</button>` : "");
 
 function questionHtml(step) {
-  if (step === 0) return `<h2>How many odds do you want?</h2><p class="sb-q-sub">Pick the target for the whole slip.</p><div class="sb-opts" role="group" aria-label="Odds">${[
-    [2, "A lighter target"], [3, "A middle target"], [5, "A bigger target, more risk"]
+  if (step === 0) return `<h2>How many odds?</h2><div class="sb-opts sb-cols-3" role="group" aria-label="Odds">${[
+    [2, "lighter"], [3, "middle"], [5, "bigger, riskier"]
   ].map(([v, s]) => `<button class="sb-opt${state.answers.odds === String(v) ? " on" : ""}" data-set="odds" data-val="${v}"><b>${v} odds</b><span>${s}</span></button>`).join("")}</div>`;
-  if (step === 1) return `<h2>Today, tomorrow, or both?</h2><p class="sb-q-sub">The picker only uses matches on the days you choose.</p><div class="sb-opts" role="group" aria-label="Day">${[
-    ["today", "Matches on today's list"], ["tomorrow", "Matches on tomorrow's list"], ["both", "Both days together"]
-  ].map(([v, s]) => `<button class="sb-opt${state.answers.day === v ? " on" : ""}" data-set="day" data-val="${v}"><b>${DAY[v]}</b><span>${s} · ${countFor(v)} with prices</span></button>`).join("")}</div>`;
-  return `<h2>More games, or fewer?</h2><p class="sb-q-sub">Both styles aim for the same target. They just split it differently.</p><div class="sb-opts" role="group" aria-label="Combo style">${["more", "fewer"].map((v) => `<button class="sb-opt${state.answers.mode === v ? " on" : ""}" data-set="mode" data-val="${v}"><b>${MODE_TEXT[v].title}</b><span>${MODE_TEXT[v].sub}</span></button>`).join("")}</div><p class="sb-q-foot">Either way, the slip's chance stays near 1 in its total odds.</p>`;
+  if (step === 1) return `<h2>Which day?</h2><div class="sb-opts sb-cols-3" role="group" aria-label="Day">${[
+    ["today", "today's list"], ["tomorrow", "tomorrow's list"], ["both", "both lists"]
+  ].map(([v, s]) => `<button class="sb-opt${state.answers.day === v ? " on" : ""}" data-set="day" data-val="${v}"><b>${DAY[v]}</b><span>${s} · ${countFor(v)} games</span></button>`).join("")}</div>`;
+  return `<h2>More games, or fewer?</h2><div class="sb-opts sb-cols-2" role="group" aria-label="Combo style">${["more", "fewer"].map((v) => `<button class="sb-opt${state.answers.mode === v ? " on" : ""}" data-set="mode" data-val="${v}"><b>${MODE_TEXT[v].title}</b><span>${MODE_TEXT[v].sub}</span></button>`).join("")}</div><p class="sb-q-foot">Either way, the slip's chance stays near 1 in its total odds.</p>`;
 }
 
 const surpriseHtml = () => `<button class="sb-surprise" id="sbSurprise">✦ Surprise me</button>`;
