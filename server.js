@@ -259,7 +259,7 @@ app.get("/sitemap.xml", async (req, res) => {
   const board = await getBoard();
   const today = todayKey();
   const urls = [
-    ["/", 1.0], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
+    ["/", 1.0], ["/build-slip", 0.9], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
     ...CATEGORIES.map((c) => [`/predictions/${c.slug}`, 0.8]),
     ["/predictions/weekend-match-predictions", 0.9],
     ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6],
@@ -326,6 +326,25 @@ const sendAsset = (file, type) => (req, res) => {
 };
 app.get("/styles.css", sendAsset("styles.css", "text/css"));
 app.get("/app.js", sendAsset("app.js", "application/javascript"));
+app.get("/scout.js", sendAsset("scout.js", "application/javascript"));
+app.get("/slip.js", sendAsset("slip.js", "application/javascript"));
+app.get("/slip-engine.js", sendAsset("slip-engine.js", "application/javascript"));
+
+// Data for the AI slip builder: upcoming matches with their prices and model chances. No keys, no personal data.
+const SLIP_ODDS = ["home_win", "draw", "away_win", "over_15_goals", "over_25_goals", "under_25_goals", "over_35_goals", "under_35_goals", "btts_yes", "btts_no"];
+const SLIP_PRED = ["home_win_pct", "draw_pct", "away_win_pct", "over_15_pct", "over_25_pct", "over_35_pct", "btts_yes_pct"];
+const keep = (obj, keys) => Object.fromEntries(keys.filter((k) => obj && obj[k] !== undefined && obj[k] !== null).map((k) => [k, obj[k]]));
+app.get("/api/slip-data", async (req, res, next) => {
+  try {
+    const board = await getBoard();
+    const today = todayKey(), tomorrow = addDays(today, 1);
+    const matches = board.matches
+      .filter((m) => m.odds && m.prediction && (!m.res || m.res.state === "pre") && [today, tomorrow].includes(dayKeyOf(m.ts)))
+      .map((m) => ({ id: m.id, lg: m.league?.name || "", h: m.home.name, a: m.away.name, t: m.kickoff || new Date(m.ts).toISOString(), d: dayKeyOf(m.ts), o: keep(m.odds, SLIP_ODDS), p: keep(m.prediction, SLIP_PRED) }));
+    res.set("Cache-Control", "public, max-age=120").json({ today, tomorrow, demo: !!DEMO, updatedAt: board.updatedAt, matches });
+  } catch (e) { next(e); }
+});
+app.get("/build-slip", route(({ ctx }) => V.slipPage(ctx), { maxAge: 300 }));
 
 // anything else
 app.use(route(() => null));

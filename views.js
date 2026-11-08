@@ -459,11 +459,12 @@ ${ctx.demo ? `<div class="demo-banner"><b>DEMO DATA.</b> Not connected to odds-a
     <a class="${active("/leagues").trim()}" href="/leagues">Leagues</a>
     <a class="${active("/live").trim()}" href="/live">Live <i class="live-dot" id="liveCount"${ctx.liveCount ? "" : " hidden"}>${ctx.liveCount || 0}</i></a>
     <a class="${active("/results").trim()}" href="/results">Results</a>
+    <a class="${active("/ai-football-predictions").trim()}" href="/ai-football-predictions">Scout AI</a>
   </nav>
   <div class="top-right"><a class="saved${active("/favourites")}" href="/favourites">★ <span>Saved</span> <i class="count" id="favCount" hidden>0</i></a><span class="age" title="18 or older only">18+</span></div>
 </header>
 <div class="ticker" aria-label="Live scores and next matches"><a class="ticker-label${t.label === "LIVE" ? " live" : ""}" id="tickerLabel" href="/live">${t.label}</a><div class="ticker-window"><div class="ticker-track" id="ticker">${t.items}</div></div></div>
-<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a><a class="catpill${o.path === '/predictions/weekend-match-predictions' ? " on" : ""}" href="/predictions/weekend-match-predictions">Weekend picks</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>
+<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/build-slip" ? " on" : ""}" href="/build-slip">Build an AI slip</a><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a><a class="catpill${o.path === '/predictions/weekend-match-predictions' ? " on" : ""}" href="/predictions/weekend-match-predictions">Weekend picks</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>
 <main class="wrap" id="main">
 ${o.body}
 </main>
@@ -472,7 +473,7 @@ ${o.body}
     <div class="foot-brand"><a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a><p>Football predictions, odds and model chances in one fast place.</p><p class="foot-join"><button type="button" class="linkish" data-contact="channel">Telegram channel</button> · <button type="button" class="linkish" data-contact="whatsapp">WhatsApp</button> · <button type="button" class="linkish" data-contact="email">Email</button></p></div>
     <div class="foot-col"><h5>Predictions</h5><a href="/predictions/weekend-match-predictions">Weekend match predictions</a>${CATEGORIES.slice(0, 6).map((c) => `<a href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}<a href="/predictions">See all tips</a></div>
     <div class="foot-col"><h5>Football</h5><a href="/football-predictions-today">Today's matches</a><a href="/football-predictions-tomorrow">Tomorrow's matches</a><a href="/live">Live scores</a><a href="/results">Results</a><a href="/leagues">All leagues</a>${topLeagues.map((l) => `<a class="lg-link" href="${leaguePath(l)}">${esc(l.name)}</a>`).join("")}</div>
-    <div class="foot-col"><h5>Site</h5><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/track-record">Track record</a><a href="/contact">Contact</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
+    <div class="foot-col"><h5>Site</h5><a href="/ai-football-predictions">Scout AI helper</a><a href="/about">About us</a><a href="/how-it-works">How it works</a><a href="/responsible-gambling">Responsible gambling</a><a href="/track-record">Track record</a><a href="/contact">Contact</a><a href="/terms">Terms of use</a><a href="/privacy">Privacy policy</a></div>
   </div>
   <div class="foot-bar"><p><b class="age-pill">18+</b> ${SITE_NAME} is an information site, not a bookmaker, and takes no bets. Odds can change at any time. Predictions are estimates, not guarantees. Bet only where it is legal and only what you can afford to lose.</p><span class="mono">&copy; ${new Date().getFullYear()} ${SITE_NAME}</span></div>
 </footer>
@@ -481,7 +482,18 @@ ${o.body}
   <div id="slipBody"></div>
 </aside>
 <button type="button" class="slip-fab" id="slipFab" hidden><span>Pick slip</span><b id="fabCount">0</b><span class="mono" id="fabOdds">0.00</span></button>
+<div class="scout" id="scout">
+  <a class="scout-bubble" id="scoutBubble" href="/build-slip">Build an AI slip <b aria-hidden="true">→</b></a>
+  <button type="button" class="scout-fab scout-blink" id="scoutFab" aria-expanded="false" aria-controls="scoutPanel" aria-label="Open Scout, the AI football prediction helper"><img src="/assets/scout-logo.svg" width="34" height="34" alt=""><span>Scout AI</span><i class="scout-dot" aria-hidden="true"></i></button>
+  <section class="scout-panel" id="scoutPanel" aria-label="Scout AI helper" hidden>
+    <header class="scout-head"><div class="scout-id"><img src="/assets/scout-logo.svg" width="34" height="34" alt=""><div><b>Scout</b><small>AI helper · 18+ · no guarantees</small></div></div><button type="button" class="scout-x" id="scoutX" aria-label="Close Scout">×</button></header>
+    <div class="scout-log" id="scoutLog" aria-live="polite"></div>
+    <div class="scout-chips" id="scoutChips"></div>
+    <form class="scout-ask" id="scoutForm" autocomplete="off"><label class="sr" for="scoutInput">Ask Scout a question</label><input id="scoutInput" type="text" maxlength="160" placeholder="Type a question…"><button type="submit">Ask</button></form>
+  </section>
+</div>
 <script src="/app.js?v=${ctx.v}" defer></script>
+<script src="/scout.js?v=${ctx.v}" defer></script>
 ${GC_CODE ? `<script data-goatcounter="https://${GC_CODE}.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>` : ""}
 </body>
 </html>`;
@@ -1509,7 +1521,7 @@ export function staticPage(ctx, slug) {
   const p = PAGES[slug];
   const path = `/${slug}`;
   const body = `${crumbs([["Home", "/"], [p.h1, path]])}<article class="prose page"><h1>${esc(p.h1)}</h1>${p.body}</article>`;
-  return { title: p.title, desc: p.desc, path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], [p.h1, path]])] };
+  return { title: p.title, desc: p.desc, path, body, noindex: !!p.noindex, ld: [crumbLd(ctx.origin, [["Home", "/"], [p.h1, path]])] };
 }
 
 export function notFoundPage() {
@@ -1531,4 +1543,27 @@ export function warmingPage() {
     title: `Loading today's matches | ${SITE_NAME}`, desc: "Loading matches.", path: "/loading", noindex: true, refresh: 15, ld: [],
     body: `<div class="notfound"><h1>Getting today's matches…</h1><p>Our data source is waking up. This page reloads by itself every few seconds, so just wait a moment.</p><div class="btn-row"><a class="btn solid" href="">Reload now</a></div></div>`
   };
+}
+
+
+export function slipPage(ctx) {
+  const path = "/build-slip";
+  const body = `${crumbs([["Home", "/"], ["AI slip builder", path]])}
+<section class="sb-wrap" aria-labelledby="sbTitle">
+  <header class="sb-hero"><img src="/assets/scout-logo.svg" width="56" height="56" alt=""><div><span class="sb-kick">AI slip builder</span><h1 id="sbTitle">Build an AI football slip in three taps</h1><p>Pick the odds, the day and the style. The model builds the slip from today's and tomorrow's matches, and shows you its reasons.</p></div></header>
+  <div id="slipStage" class="sb-stage" aria-live="polite"><p class="sb-q-sub">Loading matches…</p></div>
+  <div id="mySlip" class="sb-mine"></div>
+  <section class="prose sb-seo">
+    <h2>How the AI slip builder works</h2>
+    <p>The builder reads today's and tomorrow's matches that have bookmaker prices and a model chance. It looks at each game across the markets we carry: match result, double chance, goals and both teams to score. More combo only uses games the model gives at least 75% to land. Fewer combo takes bigger risks, so it accepts games from 65% down, always picking the strongest first. A slip never uses two bets from the same match.</p>
+    <h2>More combo or fewer combo</h2>
+    <p>More combo uses more games with a smaller price on each, which is the safer shape. Fewer combo uses one to five games with bigger prices on each, which is the higher-risk shape. Both aim for the total odds you picked, and both show the reasons for every pick.</p>
+    <h2>Why there is no guarantee</h2>
+    <p>A slip's chance is roughly one divided by its total odds, and every extra game lowers it further. Even a strong pick can lose to a late goal or a red card. The builder helps you see the numbers clearly. It cannot promise a win.</p>
+    <p class="sb-fine-page">18+ only. Bet responsibly, only where it is legal where you live, and only what you can afford to lose. <a href="/responsible-gambling">Responsible gambling</a></p>
+  </section>
+  <noscript><p>This builder needs JavaScript. You can still read the <a href="/football-predictions-today">predictions for today</a>.</p></noscript>
+</section>
+<script type="module" src="/slip.js?v=${ctx.v}"></script>`;
+  return { title: "AI Slip Builder: Build a Football Combo in 3 Taps | SportyPredictz", desc: "Build an AI football slip in three taps. Choose the odds, today or tomorrow, and more or fewer games. The model shows its reasons. No guarantees.", path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["AI slip builder", path]])] };
 }

@@ -421,6 +421,44 @@ export const PAGES = {
       `<h2>What we do with your message</h2><p>We only use the details you send to reply to you. We do not sell them or add them to a mailing list without asking first. We are not able to give personal betting advice; the predictions on this site are the same for everyone.</p>`
     ]
   },
+  "ai-football-predictions": {
+    title: "AI Football Predictions and Scout, Our AI Helper | SportyPredictz",
+    desc: "How AI football predictions work, how accurate they are, what the odds mean, and why no AI can guarantee a win. Meet Scout, the SportyPredictz AI helper.",
+    h1: "AI football predictions, explained honestly",
+    body: [
+      `<p class="lead"><img src="/assets/scout-logo.svg" width="64" height="64" alt="Scout AI logo" style="float:left;margin:0 14px 6px 0;border-radius:16px"> Let's be straight from the start. No AI can reliably tell you who wins a football match. What an AI can do well is read a lot of odds and numbers, very quickly, and show you what they seem to say. This page explains how that works here, what it can't do, and why we built it.</p>`,
+      `<h2>What is an AI football prediction?</h2><p>An AI football prediction is an estimate of what might happen in a match, worked out by a computer model rather than a hunch. On SportyPredictz the model looks at the bookmaker odds for each match, takes out the bookmaker's built-in margin to get a fairer chance, and sets that beside the model's own read. You get the numbers. You decide what to make of them.</p>`,
+      `<h2>Meet Scout, the AI prediction helper</h2><p>Scout is the small assistant in the corner of the screen. Tap it and ask a question: how accurate the picks are, what the odds mean, where today's matches are, or how to use the notes page. Scout doesn't chat like a person and doesn't know anything about your bets. It answers from the same plain notes written on this page.</p>`,
+      `<h2>Why we built it</h2><p>Football has a lot of matches every day, and checking the odds for each one by hand takes ages. We wanted something that gets through the numbers quickly, covers more games than one person could, and keeps the wording plain. Speed and reach are the reason. Accuracy is what we aim for, but it is not something we can promise.</p>`,
+      `<h2>How accurate are AI football predictions?</h2><p>Honestly? Sometimes right, sometimes not. Football is full of surprises: a red card, a late injury, a deflected shot. A sensible pick can still lose. Over a long run you can check how the picks did on the <a href="/track-record">track record page</a>, and judge the whole record rather than one good weekend or one bad one.</p>`,
+      `<h2>Can AI guarantee a winning football bet?</h2><p>No. Nothing and nobody can guarantee a football result. If a site or a person says they have a sure win, treat that as a warning sign. Our predictions are estimates, not guarantees, and they are not betting advice.</p>`,
+      `<h2>Free AI football tips, and what free means here</h2><p>Reading the predictions and using Scout is free. We don't take bets and we don't sell tips in a shop. The site earns nothing from a pick winning or losing, so there is no reason for us to push one on you.</p>`,
+      `<h3>AI football predictions for today and tomorrow</h3><p>Today's and tomorrow's matches, each with the odds, the model's chances and the picks. Start with <a href="/football-predictions-today">today's football predictions</a> or <a href="/football-predictions-tomorrow">tomorrow's</a>.</p>`,
+      `<h3>Premier League and other league AI predictions</h3><p>Browse by competition on the <a href="/leagues">leagues page</a>. Each league shows its fixtures, its table and the recent form of the teams in it.</p>`,
+      `<h3>Over 2.5 goals and both teams to score predictions</h3><p>Goal markets sit next to the match result, so you can compare them side by side. The <a href="/predictions">all tips page</a> lists every category in one place.</p>`,
+      `<h3>Football odds analysis explained</h3><p>Each match shows the bookmaker's price and the model's chance together. A price that looks too short or too long is easy to spot once both numbers are on the same line.</p>`,
+      `<h3>Live scores and results</h3><p>Follow matches as they are played on the <a href="/live">live page</a>, then check finished games on <a href="/results">results</a>.</p>`,
+      `<h2>Short notes: where Scout may not be clear</h2>`,
+      `<ul><li>Team news changes fast. Lineups and injuries can land after a pick is made.</li><li>Odds move. The price you see may not be the price you get.</li><li>Smaller leagues have less data, so their picks are less reliable.</li><li>Scout explains numbers. It cannot see the pitch, the weather or the mood in the dressing room.</li><li>Scout can misread a question. If an answer is off, rephrase it or read the page.</li></ul>`,
+      `<h2>Before you act on any pick</h2><p>Check the team news, compare the price with another bookmaker, and decide the most you are willing to lose before you look at a single pick. If a pick makes you want to chase a loss, step away. The <a href="/responsible-gambling">responsible gambling page</a> explains the signs to watch for and where to get help.</p>`,
+      `<h2>Questions people ask</h2>`,
+      `<details><summary>Is Scout a real person?</summary><p>No. Scout is an AI helper and it can make mistakes. It is not a tipster.</p></details><details><summary>Do I need to pay?</summary><p>No. Reading the predictions and using Scout is free.</p></details><details><summary>Can I use my voice?</summary><p>Yes. The <a href="/notes">notes page</a> has a microphone. Tap it, speak, and your words are typed out. Your notes stay in your own browser.</p></details><details><summary>Is this betting advice?</summary><p>No. SportyPredictz is an information site. We take no bets, and odds can change at any time.</p></details>`,
+      `<p><b>18+ only.</b> Please bet responsibly, only where it is legal where you live, and only what you can afford to lose.</p>`
+    ]
+  },
+  notes: {
+    title: "Notes with Voice | SportyPredictz",
+    desc: "Write your football notes and speak them with the microphone. Your notes stay in your own browser.",
+    h1: "Your notes",
+    noindex: true,
+    body: [
+      `<p>Jot down picks you are thinking about, questions for Scout, or your own reasons. Tap the mic to speak. Your notes are saved in this browser only, and nobody else can see them.</p>`,
+      `<div class="notes-tools"><button type="button" class="mic-btn" id="micBtn" aria-pressed="false"><span aria-hidden="true">●</span> <span id="micLabel">Start speaking</span></button><button type="button" class="notes-btn" id="copyNotes">Copy</button><button type="button" class="notes-btn" id="clearNotes">Clear</button><span class="mono" id="wordCount">0 words</span></div>`,
+      `<label class="sr" for="notesBox">Your notes</label><textarea class="notes-box" id="notesBox" placeholder="Type here, or tap Start speaking…"></textarea>`,
+      `<p class="notes-status" id="micStatus" role="status" aria-live="polite"></p>`,
+      `<p>Tip: the microphone works best in Chrome on Android or Safari on iPhone. It asks for your permission the first time, and a quiet room helps.</p>`
+    ]
+  },
   about: {
     title: "About SportyPredictz",
     desc: "SportyPredictz is a free football predictions site: market odds, model probabilities, live scores and league tables in one place.",
