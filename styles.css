@@ -1245,3 +1245,28 @@ html, body { overflow-x: hidden; max-width: 100%; }
   .catbar .catscroll, .catscroll { gap: 5px !important; }
   .catbar .catscroll > a, .catscroll > a, .catpill { font-size: 11px !important; padding: 5px 9px !important; }
 }
+
+/* ---- Round fixes: rows never overflow, picks wrap, smaller text ---- */
+.wk-wrap, .wk-day, .wk-list, .wk-row, .wk-row > a, .wk-hotcard { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.wk-list { grid-template-columns: minmax(0, 1fr); }
+.wk-row { flex-wrap: wrap; }
+.wk-row > a { flex: 1 1 60%; }
+.wk-teams { overflow-wrap: anywhere; font-size: .86rem; }
+.wk-pick { white-space: normal; text-align: center; font-size: .66rem; max-width: 100%; }
+.wk-fav { background: var(--panel); color: var(--acid); border: 1px solid rgba(182,255,59,0.35); }
+.wk-when { font-size: .66rem; }
+.wk-league { font-size: .66rem; }
+@media (min-width: 760px) { .wk-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* footer smaller on phones */
+.foot-card .foot-col h5 { font-size: .64rem; }
+.foot-card .foot-col a { font-size: 10.5px; padding: 4px 8px; }
+.foot-card .foot-brand p { font-size: .78rem; }
+.foot-card .foot-bar p { font-size: .68rem; }
+
+/* category strip: slimmer on phones */
+@media (max-width: 760px) {
+  .catbar, nav.catbar { padding: 4px 6px !important; }
+  .catbar .catscroll, .catscroll { gap: 4px !important; }
+  .catbar .catscroll > a, .catscroll > a, .catpill { font-size: 10px !important; padding: 3px 7px !important; line-height: 1.1 !important; }
+}

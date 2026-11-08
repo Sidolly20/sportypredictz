@@ -215,7 +215,7 @@ export async function getLive() {
 }
 
 // ---------- results ----------
-async function fetchResultsFresh() {
+export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
     const d = await callOddsApi("/v1/results?limit=50", 60, 900);
@@ -325,7 +325,7 @@ function extractGroups(node, label = "", out = [], depth = 0) {
   return out;
 }
 
-async function fetchStandings(league) {
+export async function getStandings(league) {
   if (!league || league.id == null) return null;
   const key = String(league.id);
   const hit = standCache.get(key);
@@ -426,32 +426,4 @@ export async function getWeekend(weekKey, days) {
   weekendMem.key = weekKey;
   weekendMem.matches = list || [];
   return weekendMem.matches;
-}
-
-// ---------- Serve from memory, refresh in the background ----------
-// A page never waits on the odds-api once we have a copy. The copy is returned at once; if it is older than
-// freshMs, a refresh starts in the background and the next visitor gets the newer copy.
-// Only the very first request of the day for a key waits, and only up to 2.5 seconds before using the fallback.
-const swrCache = new Map();
-function swr(key, freshMs, fn, fallback) {
-  const e = swrCache.get(key);
-  const now = Date.now();
-  if (e) {
-    if (now - e.at > freshMs && !e.busy) {
-      e.busy = true;
-      fn().then((v) => { e.value = v; e.at = Date.now(); }).catch(() => { e.at = Date.now(); }).finally(() => { e.busy = false; });
-    }
-    return Promise.resolve(e.value);
-  }
-  const p = fn().then((v) => { swrCache.set(key, { value: v, at: Date.now(), busy: false }); return v; })
-    .catch(() => { swrCache.set(key, { value: fallback, at: 0, busy: false }); return fallback; });
-  return Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), 2500))]);
-}
-
-export function getResults() {
-  return swr("results", 60e3, fetchResultsFresh, { results: [], error: true });
-}
-export function getStandings(league) {
-  if (!league || league.id == null) return Promise.resolve(null);
-  return swr(`standings:${league.id}`, 10 * 60e3, () => fetchStandings(league), null);
 }

@@ -224,6 +224,11 @@ const LIVE_MAX_MS = 2.75 * 3600e3;
 
 export function scoreInfo(m, lv, rs, now = Date.now()) {
   const kick = m.ts || (lv && lv.ts) || 0;
+  // A saved final score always wins: a finished match must never keep showing as live.
+  if (rs) {
+    const [fh, fa] = scoreOfRaw(rs);
+    if (fh !== null && fa !== null) return { state: "ft", h: fh, a: fa, label: "FT" };
+  }
   if (lv && !FINISHED.test(String(lv.status || "")) && !(kick && now - kick > LIVE_MAX_MS)) {
     const [h, a] = scoreOfRaw(lv);
     const base = liveLabel(lv);

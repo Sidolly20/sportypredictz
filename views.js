@@ -641,11 +641,24 @@ export function weekendPage(ctx, { matches, results = [] }) {
     ? results.filter((r) => r.score && r.score.home != null && lastWeekend.includes(dayKey(r.ts))).sort((a, b) => b.ts - a.ts).slice(0, 24)
     : [];
 
-  const row = (m) => {
+  // Every game gets a pick. Model pick first; if the feed has none, the market favourite from the odds (labelled as such).
+  const favPick = (m) => {
+    const o = m.odds || {};
+    const opts = [[o.home_win, `${m.home.name} to win`], [o.draw, "Draw"], [o.away_win, `${m.away.name} to win`]].filter((x) => x[0]);
+    if (!opts.length) return null;
+    opts.sort((a, b) => a[0] - b[0]);
+    return opts[0][1];
+  };
+  const pickChip = (m) => {
     const tp = topPick(m);
+    if (tp) return `<span class="wk-pick">${esc(tp.label)} ${Math.round(tp.pct)}%</span>`;
+    const f = favPick(m);
+    return f ? `<span class="wk-pick wk-fav">Favourite: ${esc(f)}</span>` : `<span class="wk-pick wk-fav">Prediction soon</span>`;
+  };
+  const row = (m) => {
     const right = done(m)
       ? `<span class="wk-score">${scEl(m, "h")}<i>–</i>${scEl(m, "a")}</span>`
-      : tp ? `<span class="wk-pick">${esc(tp.label)} ${Math.round(tp.pct)}%</span>` : "";
+      : pickChip(m);
     return `<li class="wk-row"><a href="${matchPath(m)}"><span class="wk-when">${esc(kickLabel(m.ts))}</span><span class="wk-teams">${esc(m.home.name)} <em>v</em> ${esc(m.away.name)}</span><span class="wk-league">${esc(m.league.name)}</span></a>${right}</li>`;
   };
   const hotCard = (m) => {
