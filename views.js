@@ -430,6 +430,20 @@ export function layout(ctx, o) {
   const active = (p) => (o.path === p || (p !== "/" && o.path.startsWith(p)) ? " on" : "");
   const t = ctx.ticker;
   const topLeagues = (ctx.leagues || []).slice(0, 6);
+  const chrome = `<header class="topbar">
+  <a class="logo" href="/" aria-label="${SITE_NAME} home"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a>
+  <nav class="mainnav" aria-label="Main">
+    <a class="${active("/football-predictions-today").trim()}" href="/football-predictions-today">Today</a>
+    <a class="${active("/football-predictions-tomorrow").trim()}" href="/football-predictions-tomorrow">Tomorrow</a>
+    <a class="${active("/leagues").trim()}" href="/leagues">Leagues</a>
+    <a class="${active("/live").trim()}" href="/live">Live <i class="live-dot" id="liveCount"${ctx.liveCount ? "" : " hidden"}>${ctx.liveCount || 0}</i></a>
+    <a class="${active("/results").trim()}" href="/results">Results</a>
+    <a class="${active("/ai-football-predictions").trim()}" href="/ai-football-predictions">Scout AI</a>
+  </nav>
+  <div class="top-right"><a class="saved${active("/favourites")}" href="/favourites">★ <span>Saved</span> <i class="count" id="favCount" hidden>0</i></a><span class="age" title="18 or older only">18+</span></div>
+</header>
+<div class="ticker" aria-label="Live scores and next matches"><a class="ticker-label${t.label === "LIVE" ? " live" : ""}" id="tickerLabel" href="/live">${t.label}</a><div class="ticker-window"><div class="ticker-track" id="ticker">${t.items}</div></div></div>
+<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/build-slip" ? " on" : ""}" href="/build-slip">Build an AI slip</a><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a><a class="catpill${o.path === '/predictions/weekend-match-predictions' ? " on" : ""}" href="/predictions/weekend-match-predictions">Weekend picks</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -451,20 +465,7 @@ ${ld}
 </head>
 <body data-market="1x2">
 ${ctx.demo ? `<div class="demo-banner"><b>DEMO DATA.</b> Not connected to odds-api yet. Set <code>ODDS_API_KEY_SPORTY</code> on Render for real matches.</div>` : ""}
-<header class="topbar">
-  <a class="logo" href="/" aria-label="${SITE_NAME} home"><span class="logo-mark" aria-hidden="true"></span><span>SPORTY<b>PREDICTZ</b></span></a>
-  <nav class="mainnav" aria-label="Main">
-    <a class="${active("/football-predictions-today").trim()}" href="/football-predictions-today">Today</a>
-    <a class="${active("/football-predictions-tomorrow").trim()}" href="/football-predictions-tomorrow">Tomorrow</a>
-    <a class="${active("/leagues").trim()}" href="/leagues">Leagues</a>
-    <a class="${active("/live").trim()}" href="/live">Live <i class="live-dot" id="liveCount"${ctx.liveCount ? "" : " hidden"}>${ctx.liveCount || 0}</i></a>
-    <a class="${active("/results").trim()}" href="/results">Results</a>
-    <a class="${active("/ai-football-predictions").trim()}" href="/ai-football-predictions">Scout AI</a>
-  </nav>
-  <div class="top-right"><a class="saved${active("/favourites")}" href="/favourites">★ <span>Saved</span> <i class="count" id="favCount" hidden>0</i></a><span class="age" title="18 or older only">18+</span></div>
-</header>
-<div class="ticker" aria-label="Live scores and next matches"><a class="ticker-label${t.label === "LIVE" ? " live" : ""}" id="tickerLabel" href="/live">${t.label}</a><div class="ticker-window"><div class="ticker-track" id="ticker">${t.items}</div></div></div>
-<nav class="catbar" aria-label="Prediction categories"><div class="catscroll"><a class="catpill${o.path === "/build-slip" ? " on" : ""}" href="/build-slip">Build an AI slip</a><a class="catpill${o.path === "/predictions" ? " on" : ""}" href="/predictions">All tips</a><a class="catpill${o.path === '/predictions/weekend-match-predictions' ? " on" : ""}" href="/predictions/weekend-match-predictions">Weekend picks</a>${CATEGORIES.map((c) => `<a class="catpill${o.path === `/predictions/${c.slug}` ? " on" : ""}" href="/predictions/${c.slug}">${esc(c.name)}</a>`).join("")}</div></nav>
+${o.bare ? "" : chrome}
 <main class="wrap" id="main">
 ${o.body}
 </main>
@@ -489,8 +490,10 @@ ${o.body}
     <div class="scout-chips" id="scoutChips"></div>
     <form class="scout-ask" id="scoutForm" autocomplete="off"><label class="sr" for="scoutInput">Ask Scout a question</label><input id="scoutInput" type="text" maxlength="160" placeholder="Type a question…"><button type="submit">Ask</button></form>
   </section>
-  <button type="button" class="scout-faq" id="scoutFab" aria-expanded="false" aria-controls="scoutPanel">FAQ</button>
-  <a class="scout-go scout-blink" href="/build-slip" aria-label="Open the AI slip builder"><img src="/assets/scout-logo.svg" width="52" height="52" alt=""></a>
+  <div class="scout-stack">
+    <a class="scout-go scout-blink" href="/build-slip" aria-label="Open the AI slip builder"><img src="/assets/scout-logo.svg" width="52" height="52" alt=""></a>
+    <button type="button" class="scout-faq" id="scoutFab" aria-expanded="false" aria-controls="scoutPanel" aria-label="Open FAQ"><span>FAQ</span></button>
+  </div>
 </div>
 <script src="/app.js?v=${ctx.v}" defer></script>
 <script type="module" src="/scout.js?v=${ctx.v}"></script>
@@ -1549,8 +1552,10 @@ export function warmingPage() {
 export function slipPage(ctx) {
   const path = "/build-slip";
   const body = `<section class="sb-wrap" aria-labelledby="sbTitle">
-  <header class="sb-hero"><img src="/assets/scout-logo.svg" width="36" height="36" alt=""><div><h1 id="sbTitle">AI slip builder</h1><p>Three taps. The model shows you why.</p></div></header>
+  <div class="sb-screen">
+  <header class="sb-hero"><img src="/assets/scout-logo.svg" width="36" height="36" alt=""><div><h1 id="sbTitle">AI slip builder</h1><p>Three taps. The model shows you why.</p></div><a class="sb-home" href="/">SportyPredictz →</a></header>
   <div id="slipStage" class="sb-stage" aria-live="polite"><p class="sb-q-sub">Loading matches…</p></div>
+  </div>
   <div id="mySlip" class="sb-mine"></div>
   <section class="prose sb-seo">
     <h2>How the AI slip builder works</h2>
@@ -1564,5 +1569,5 @@ export function slipPage(ctx) {
   <noscript><p>This builder needs JavaScript. You can still read the <a href="/football-predictions-today">predictions for today</a>.</p></noscript>
 </section>
 <script type="module" src="/slip.js?v=${ctx.v}"></script>`;
-  return { title: "AI Slip Builder: Build a Football Combo in 3 Taps | SportyPredictz", desc: "Build an AI football slip in three taps. Choose the odds, today or tomorrow, and more or fewer games. The model shows its reasons. No guarantees.", path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["AI slip builder", path]])] };
+  return { bare: true, title: "AI Slip Builder: Build a Football Combo in 3 Taps | SportyPredictz", desc: "Build an AI football slip in three taps. Choose the odds, today or tomorrow, and more or fewer games. The model shows its reasons. No guarantees.", path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["AI slip builder", path]])] };
 }

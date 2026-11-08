@@ -1482,3 +1482,16 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .sb-type { margin: 8px 76px 0 0; }
 .sb-type input { padding: 10px 12px; }
 .sb-type button { padding: 10px 14px; min-height: 44px; }
+
+/* FAQ badge tucked under the bottom edge of the ring */
+.scout-stack { position: relative; width: 62px; height: 62px; }
+.scout-stack .scout-go { position: absolute; inset: 0; }
+.scout-faq { position: absolute; right: -10px; bottom: -14px; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--acid); color: #0a1200; box-shadow: 0 4px 12px rgba(0,0,0,.5); border: 2px solid var(--panel); }
+.scout-faq span { font-family: var(--mono); font-size: .36rem; font-weight: 900; letter-spacing: .02em; line-height: 1; }
+.scout-faq:hover { background: var(--acid-d); }
+.sb-home { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--acid); text-decoration: none; align-self: flex-start; white-space: nowrap; }
+.sb-hero { align-items: center; }
+
+/* The builder fills one phone screen. My slip and the guide start below the fold. */
+.sb-screen { min-height: calc(100vh - 24px); min-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
+.sb-screen .sb-stage { flex: 1 0 auto; }
