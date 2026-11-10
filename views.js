@@ -1481,27 +1481,71 @@ const clubKey = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]
 export const isClub = (name, team) => team.aliases.some((a) => clubKey(a) === clubKey(name));
 export const teamMatches = (matches, team) => matches.filter((m) => isClub(m.home.name, team) || isClub(m.away.name, team));
 
-export function teamPage(ctx, { team, matches }) {
+const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+export function teamPage(ctx, { team, matches, past = [], tables = [] }) {
   const path = `/team/${team.slug}`;
   const upcoming = matches.filter((m) => !m.res || m.res.state === "pre").sort((a, b) => a.ts - b.ts);
-  const results = matches.filter((m) => m.res && m.res.state === "ft").sort((a, b) => b.ts - a.ts).slice(0, 10);
+  const recent = past.filter((m) => m.score && m.score.home != null && m.score.away != null).sort((a, b) => b.ts - a.ts);
+  const playedCount = recent.length;
   const picks = upcoming.map((m) => ({ m, tp: topPick(m) })).filter((x) => x.tp).sort((a, b) => b.tp.pct - a.tp.pct).slice(0, 5);
-  const leagues = [...new Set(matches.map((m) => m.league.name))];
   const next = upcoming[0];
-  const intro = next
-    ? `${team.name} have ${upcoming.length} upcoming ${upcoming.length === 1 ? "match" : "matches"} on our list${leagues.length ? ` across ${leagues.join(", ")}` : ""}. Next up: ${next.home.name} vs ${next.away.name} (${next.league.name}).`
-    : `No upcoming ${team.name} matches are on our list right now. Recent results are below, and new fixtures appear as they are added.`;
+
+  // League position and the clubs either side of it
+  const tableInfo = tables.map(({ league, standings }) => {
+    const rows = (standings && standings.groups && standings.groups[0] && standings.groups[0].rows) || [];
+    const idx = rows.findIndex((r) => isClub(r.team, team));
+    return idx < 0 ? null : { league, rows, idx };
+  }).find(Boolean);
+  const row = tableInfo ? tableInfo.rows[tableInfo.idx] : null;
+  const above = tableInfo && tableInfo.idx > 0 ? tableInfo.rows[tableInfo.idx - 1] : null;
+  const below = tableInfo && tableInfo.idx < tableInfo.rows.length - 1 ? tableInfo.rows[tableInfo.idx + 1] : null;
+  const leader = tableInfo ? tableInfo.rows[0] : null;
+
+  // Recent form and goals, from finished matches only
+  const form = recent.slice(0, 5).map((m) => {
+    const home = isClub(m.home.name, team);
+    const me = home ? m.score.home : m.score.away, them = home ? m.score.away : m.score.home;
+    return me > them ? "W" : me === them ? "D" : "L";
+  });
+  const goalsFor = recent.slice(0, 10).reduce((n, m) => n + (isClub(m.home.name, team) ? m.score.home : m.score.away), 0);
+  const goalsAgainst = recent.slice(0, 10).reduce((n, m) => n + (isClub(m.home.name, team) ? m.score.away : m.score.home), 0);
+  const leagues = [...new Set([...matches, ...past].map((m) => m.league && m.league.name).filter(Boolean))];
+
+  // Written overview, from the facts and numbers we actually have
+  const paras = [];
+  if (team.city) paras.push(`${team.name} are based in ${team.city}${team.stadium ? `, and play their home matches at ${team.stadium}` : ""}.`);
+  if (row && tableInfo) {
+    let t = `In the ${tableInfo.league.name} table, ${team.name} are ${ordinal(tableInfo.idx + 1)} with ${row.pts} points from ${row.p} games.`;
+    if (above) t += ` ${above.team} are one place above on ${above.pts}.`;
+    if (below) t += ` ${below.team} are one place below on ${below.pts}.`;
+    if (leader && leader !== row) t += ` The leaders, ${leader.team}, have ${leader.pts}.`;
+    paras.push(t);
+  }
+  if (playedCount) paras.push(`Across the last ${Math.min(10, playedCount)} finished matches the club scored ${goalsFor} and conceded ${goalsAgainst}${form.length ? `. The last ${form.length} results, most recent first, read ${form.join(" ")} (W win, D draw, L loss)` : ""}.`);
+  if (next) paras.push(`The next match on our list is ${next.home.name} vs ${next.away.name} in the ${next.league.name}, at ${shortDate(next.ts)}.`);
+  else paras.push(`No upcoming ${team.name} match is on our list right now. New fixtures appear as the feed adds them.`);
+  const overview = paras.length ? paras.map((t) => `<p>${esc(t)}</p>`).join("") : `<p>${esc(team.name)} is on our list of popular clubs. Fixtures, results and model picks appear here as the feed adds them.</p>`;
+
+  const tableBlock = tableInfo ? `<section class="block"><div class="block-head"><h2>${esc(tableInfo.league.name)} table</h2></div>
+    <div class="catgrid small">${[above, row, below].filter(Boolean).map((r) => `<div class="catcard"><b>${esc(r.team)}</b><span>${r.pts} pts from ${r.p} games</span></div>`).join("")}</div>
+    <p class="mut"><a href="${leaguePath(tableInfo.league)}">Full ${esc(tableInfo.league.name)} predictions and table</a></p></section>` : "";
+
+  const formBlock = form.length ? `<section class="block"><div class="block-head"><h2>${esc(team.name)} form</h2></div><div class="catgrid small"><div class="catcard"><b>${form.join(" ")}</b><span>Last ${form.length} results, most recent first</span></div><div class="catcard"><b>${goalsFor}-${goalsAgainst}</b><span>Goals scored and conceded, last ${Math.min(10, playedCount)} matches</span></div></div></section>` : "";
+
   const body = `${crumbs([["Home", "/"], ["Teams", "/teams"], [team.name, path]])}
-  ${pageHead(`${team.name} predictions`, esc(intro))}
+  ${pageHead(`${team.name} predictions`, esc(`${team.name} fixtures, results, league position, form and model picks.`))}
+  <section class="prose"><h2>About ${esc(team.name)}</h2>${overview}</section>
+  ${tableBlock}
+  ${formBlock}
   ${picks.length ? `<section class="block"><div class="block-head"><h2>${esc(team.name)}: strongest model picks</h2></div><div class="catgrid small">${picks.map((x) => `<a class="catcard" href="${matchPath(x.m)}"><b>${esc(x.m.home.name)} vs ${esc(x.m.away.name)}</b><span>${esc(x.tp.label)} · ${Math.round(x.tp.pct)}% model</span></a>`).join("")}</div></section>` : ""}
   <section class="block"><div class="block-head"><h2>Upcoming ${esc(team.name)} matches</h2></div>${upcoming.length ? upcoming.map(matchRow).join("") : `<div class="empty">No upcoming matches on our list yet.</div>`}</section>
-  ${results.length ? `<section class="block"><div class="block-head"><h2>Recent ${esc(team.name)} results</h2></div>${results.map(matchRow).join("")}</section>` : ""}
-  <section class="prose"><h2>About ${esc(team.name)} predictions</h2><p>These predictions come from bookmaker odds and a model read of each match, with the margin taken out of the prices. Predictions are estimates, not guarantees. See <a href="/how-we-predict">how we predict</a> for what the model can and cannot do, and the <a href="/track-record">track record</a> for how past picks landed.</p></section>
-  <section class="block"><div class="block-head"><h2>Keep browsing</h2></div><div class="catgrid small"><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/football-predictions-tomorrow"><b>Tomorrow's predictions</b><span>Every match on tomorrow's list</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and final scores</span></a></div></section>`;
-  const indexable = upcoming.length + results.length >= 2;
+  ${recent.length ? `<section class="block"><div class="block-head"><h2>Recent ${esc(team.name)} results</h2></div><div class="catgrid small">${recent.slice(0, 10).map((m) => `<a class="catcard" href="${matchPath(m)}"><b>${esc(m.home.name)} ${m.score.home}-${m.score.away} ${esc(m.away.name)}</b><span>${esc(m.league.name)} · ${shortDate(m.ts)}</span></a>`).join("")}</div></section>` : ""}
+  <section class="prose"><h2>How to read ${esc(team.name)} predictions</h2><p>Each pick comes from bookmaker odds with the margin taken out, and a model read of the match. Predictions are estimates, not guarantees. See <a href="/how-we-predict">how we predict</a> for what the model can and cannot do, and the <a href="/track-record">track record</a> for how past picks landed.</p>${leagues.length ? `<p>On our list, ${esc(team.name)} appear in ${leagues.map((l) => esc(l)).join(" and ")}.</p>` : ""}</section>
+  <section class="block"><div class="block-head"><h2>Keep browsing</h2></div><div class="catgrid small"><a class="catcard" href="/football-predictions-today"><b>Today's predictions</b><span>Every match on today's list</span></a><a class="catcard" href="/football-predictions-tomorrow"><b>Tomorrow's predictions</b><span>Every match on tomorrow's list</span></a><a class="catcard" href="/results"><b>Results</b><span>Finished matches and final scores</span></a><a class="catcard" href="/teams"><b>All club pages</b><span>Every popular club we cover</span></a></div></section>`;
+  const indexable = upcoming.length + playedCount >= 2 || !!tableInfo;
   return {
     title: `${team.name} Predictions, Fixtures and Results | ${SITE_NAME}`,
-    desc: `${team.name} football predictions: upcoming matches, model picks, odds and recent results.${next ? ` Next: ${next.home.name} vs ${next.away.name}.` : ""}`,
+    desc: `${team.name} football predictions: ${tableInfo ? `${ordinal(tableInfo.idx + 1)} in the ${tableInfo.league.name}, ` : ""}${next ? `next match ${next.home.name} vs ${next.away.name}, ` : ""}recent results, form and model picks.`,
     path, body, noindex: !indexable,
     ld: [crumbLd(ctx.origin, [["Home", "/"], ["Teams", "/teams"], [team.name, path]])]
   };
@@ -1670,6 +1714,44 @@ export function slipPage(ctx) {
   <div id="slipStage" class="sb-stage" aria-live="polite"><p class="sb-q-sub">Loading matches…</p></div>
   </div>
   <div id="mySlip" class="sb-mine"></div>
+  <section class="sb-more" aria-labelledby="sbGlanceH"><h2 id="sbGlanceH" class="sb-h">At a glance</h2>
+    <div class="sb-widgets">
+      <div class="sb-widget" id="sbGlance"><p class="sb-q-sub">Loading today's numbers…</p></div>
+      <div class="sb-widget">
+        <h3>Quick return calculator</h3>
+        <p class="sb-q-sub">Type the total odds and a stake to see the possible return. Nothing is placed or paid.</p>
+        <div class="sb-calc2"><label>Total odds <input id="calcOdds" type="number" min="1" step="0.01" value="2.50"></label><label>Stake <input id="calcStake" type="number" min="0" step="1" value="10"></label></div>
+        <p class="sb-ret">Possible return: <b id="calcOut">25.00</b></p>
+      </div>
+    </div>
+  </section>
+  <section class="sb-more"><h2 class="sb-h">How the builder decides</h2>
+    <div class="sb-steps">
+      <div class="sb-step"><b>1</b><span>It reads today's and tomorrow's matches that still have prices and a model chance.</span></div>
+      <div class="sb-step"><b>2</b><span>It keeps only the picks the model rates at 75% or more for more combo, or 65% or more for fewer combo.</span></div>
+      <div class="sb-step"><b>3</b><span>It uses one pick per match, spreads leagues and markets, and aims for your total odds.</span></div>
+      <div class="sb-step"><b>4</b><span>It shows the reasons, the model chance against the bookmaker's price, so you can judge it yourself.</span></div>
+    </div>
+  </section>
+  <section class="sb-more"><h2 class="sb-h">Markets the builder uses</h2>
+    <div class="catgrid small">
+      <a class="catcard" href="/predictions/over-1-5-goals"><b>Over 1.5 goals</b><span>Matches likely to see two or more goals</span></a>
+      <a class="catcard" href="/predictions/over-2-5-goals"><b>Over 2.5 goals</b><span>Goal-rich games across all leagues</span></a>
+      <a class="catcard" href="/predictions/under-2-5-goals"><b>Under 2.5 goals</b><span>Tighter games with fewer goals</span></a>
+      <a class="catcard" href="/predictions/both-teams-to-score"><b>Both teams to score</b><span>Where both sides are likely to find the net</span></a>
+      <a class="catcard" href="/predictions/double-chance"><b>Double chance</b><span>Cover two of the three results</span></a>
+      <a class="catcard" href="/predictions/draws"><b>Draws</b><span>Evenly matched games</span></a>
+      <a class="catcard" href="/predictions/banker-picks"><b>Banker picks</b><span>The strongest reads of the day</span></a>
+      <a class="catcard" href="/predictions/weekend-match-predictions"><b>Weekend picks</b><span>Friday to Sunday fixtures</span></a>
+    </div>
+  </section>
+  <section class="sb-more"><h2 class="sb-h">Questions people ask</h2>
+    <details class="sb-faq"><summary>Is the slip guaranteed to win?</summary><p>No. Each pick is an estimate, and a slip's chance is roughly one divided by its total odds. Any game can change.</p></details>
+    <details class="sb-faq"><summary>What does "more combo" mean?</summary><p>More games, each with a smaller price. The slip is spread across more matches for a safer pick on each game.</p></details>
+    <details class="sb-faq"><summary>What does "fewer combo" mean?</summary><p>Fewer games, each with a bigger price. Each pick carries more risk, so the builder still chooses the strongest options it can find.</p></details>
+    <details class="sb-faq"><summary>Can I save a slip?</summary><p>Yes. Add it to My slip. It's saved in your own browser, and you can use the calculator to see the return.</p></details>
+    <details class="sb-faq"><summary>Is it betting advice?</summary><p>No. SportyPredictz is an information site and takes no bets. Bet only where it is legal where you live, and only what you can afford to lose.</p></details>
+  </section>
   <section class="prose sb-seo">
     <h2>How the AI slip builder works</h2>
     <p>The builder reads today's and tomorrow's matches that have bookmaker prices and a model chance. It looks at each game across the markets we carry: match result, double chance, goals and both teams to score. More combo only uses games the model gives at least 75% to land. Fewer combo takes bigger risks, so it accepts games from 65% down, always picking the strongest first. A slip never uses two bets from the same match.</p>

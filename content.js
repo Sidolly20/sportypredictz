@@ -443,7 +443,42 @@ export const TEAMS = [
   { name: "Kwara United", aliases: ["Kwara United", "Kwara Utd"] },
   { name: "Kano Pillars", aliases: ["Kano Pillars", "Kano Pillars FC"] }
 ].map((t) => ({ ...t, slug: t.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") }));
-export const TEAM_BY_SLUG = Object.fromEntries(TEAMS.map((t) => [t.slug, t]));
+// Where a club is based, and its home ground where it is well known. Only add facts that are certain.
+const TEAM_FACTS = {
+  "arsenal": { city: "London", stadium: "Emirates Stadium" },
+  "chelsea": { city: "London", stadium: "Stamford Bridge" },
+  "tottenham": { city: "London", stadium: "Tottenham Hotspur Stadium" },
+  "liverpool": { city: "Liverpool", stadium: "Anfield" },
+  "manchester-city": { city: "Manchester", stadium: "Etihad Stadium" },
+  "manchester-united": { city: "Manchester", stadium: "Old Trafford" },
+  "newcastle": { city: "Newcastle upon Tyne", stadium: "St James' Park" },
+  "real-madrid": { city: "Madrid", stadium: "Santiago Bernabéu" },
+  "barcelona": { city: "Barcelona" },
+  "atletico-madrid": { city: "Madrid" },
+  "bayern-munich": { city: "Munich", stadium: "Allianz Arena" },
+  "borussia-dortmund": { city: "Dortmund" },
+  "psg": { city: "Paris", stadium: "Parc des Princes" },
+  "juventus": { city: "Turin" },
+  "ac-milan": { city: "Milan" },
+  "inter-milan": { city: "Milan" },
+  "napoli": { city: "Naples" },
+  "ajax": { city: "Amsterdam" },
+  "benfica": { city: "Lisbon" },
+  "porto": { city: "Porto" },
+  "sporting-cp": { city: "Lisbon" },
+  "celtic": { city: "Glasgow" },
+  "rangers": { city: "Glasgow" },
+  "galatasaray": { city: "Istanbul" },
+  "fenerbahce": { city: "Istanbul" },
+  "al-ahly": { city: "Cairo" },
+  "kaizer-chiefs": { city: "Johannesburg" },
+  "mamelodi-sundowns": { city: "Pretoria" },
+  "kwara-united": { city: "Ilorin" },
+  "kano-pillars": { city: "Kano" },
+  "lille": { city: "Lille" }
+};
+export const TEAMS_WITH_FACTS = TEAMS.map((t) => ({ ...t, ...(TEAM_FACTS[t.slug] || {}) }));
+export const TEAM_BY_SLUG = Object.fromEntries(TEAMS_WITH_FACTS.map((t) => [t.slug, t]));
 
 export const PAGES = {
   "how-we-predict": {

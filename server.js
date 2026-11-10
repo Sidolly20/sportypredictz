@@ -184,10 +184,15 @@ app.get("/leagues", route(({ ctx, board }) => {
   return V.leaguesPage(ctx, { leagues: ctx.leagues, counts });
 }, { needsBoard: true }));
 app.get("/teams", route(({ ctx }) => V.teamsIndexPage(ctx, { teams: TEAMS }), { maxAge: 3600 }));
-app.get("/team/:slug", route(({ req, ctx, board }) => {
+app.get("/team/:slug", route(async ({ req, ctx, board }) => {
   const team = TEAM_BY_SLUG[req.params.slug];
   if (!team) return null;
-  return V.teamPage(ctx, { team, matches: V.teamMatches(board.matches, team) });
+  const matches = V.teamMatches(board.matches, team);
+  const done = await withTimeout(getResults(), 4000, { results: [] });
+  const past = V.teamMatches(done.results || [], team);
+  const leagues = [...new Map([...matches, ...past].filter((m) => m.league).map((m) => [m.league.id, m.league])).values()].slice(0, 2);
+  const tables = await Promise.all(leagues.map(async (league) => ({ league, standings: await withTimeout(getStandings(league.id).catch(() => null), 4000, null) })));
+  return V.teamPage(ctx, { team, matches, past, tables });
 }, { maxAge: 300, needsBoard: false }));
 app.get("/leagues/:slug", route(async ({ req, ctx, board }) => {
   const id = parseLeagueSlug(req.params.slug);

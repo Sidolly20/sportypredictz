@@ -1495,3 +1495,31 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* The builder fills one phone screen. My slip and the guide start below the fold. */
 .sb-screen { min-height: calc(100vh - 24px); min-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
 .sb-screen .sb-stage { flex: 1 0 auto; }
+
+/* ---------- Builder page: extra sections below the builder ---------- */
+.sb-more { margin-top: 28px; }
+.sb-h { font-size: 1.4rem; margin-bottom: 10px; }
+.sb-h + p, .sb-more > p { color: var(--mute); font-size: .9rem; }
+.sb-widgets { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .sb-widgets { grid-template-columns: 1fr 1fr; } }
+.sb-widget { background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 16px; }
+.sb-widget h3 { font-size: 1rem; margin: 6px 0 8px; }
+.sb-stat2 { display: flex; gap: 12px; margin-bottom: 6px; }
+.sb-stat2 > div { flex: 1; background: var(--panel2); border-radius: 12px; padding: 10px; text-align: center; }
+.sb-stat2 b { display: block; font-family: var(--display); font-size: 1.6rem; color: var(--acid); }
+.sb-stat2 span { font-size: .72rem; color: var(--mute); }
+.sb-top3 { list-style: none; display: grid; gap: 8px; }
+.sb-top3 a { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--panel2); text-decoration: none; }
+.sb-top3 a span { font-size: .74rem; color: var(--acid); font-weight: 700; }
+.sb-calc2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sb-calc2 label { display: grid; gap: 4px; font-size: .78rem; color: var(--mute); }
+.sb-calc2 input { padding: 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--ink2); font-size: 16px; }
+.sb-ret { margin-top: 10px; color: var(--mute); }
+.sb-ret b { font-family: var(--display); font-size: 1.4rem; color: var(--acid); }
+.sb-steps { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .sb-steps { grid-template-columns: repeat(2, 1fr); } }
+.sb-step { display: flex; gap: 12px; align-items: flex-start; background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; padding: 12px; font-size: .88rem; color: var(--mute); }
+.sb-step b { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--acid); color: #0a1200; font-family: var(--display); }
+.sb-faq { background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; padding: 12px 14px; margin-top: 8px; }
+.sb-faq summary { cursor: pointer; font-weight: 700; }
+.sb-faq p { color: var(--mute); font-size: .88rem; margin-top: 8px; }

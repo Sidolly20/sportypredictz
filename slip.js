@@ -1,6 +1,6 @@
 // slip.js - the guided AI slip builder page. Asks three tap questions, builds the slip with
 // slip-engine.js (no language model, no paid service), and shows the result in a popup.
-import { buildSlip, swapLeg, shuffleSlip, MODE_TEXT, priceNote, oneIn, thresholdsFor, upcoming } from "/slip-engine.js";
+import { buildSlip, swapLeg, shuffleSlip, MODE_TEXT, priceNote, oneIn, thresholdsFor, upcoming, legsOf } from "/slip-engine.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -288,6 +288,28 @@ mine.addEventListener("input", (e) => {
 });
 
 // ---------- start ----------
+function renderGlance() {
+  const box = $("#sbGlance");
+  if (!box || !state.data) return;
+  const all = live();
+  const today = all.filter((m) => m.d === state.data.today);
+  const tomorrow = all.filter((m) => m.d === state.data.tomorrow);
+  const top = all.map((m) => ({ m, best: legsOf(m).sort((a, b) => b.pct - a.pct)[0] })).filter((x) => x.best)
+    .sort((a, b) => b.best.pct - a.best.pct).slice(0, 3);
+  box.innerHTML = `<h3>Matches with prices</h3>
+    <div class="sb-stat2"><div><b>${today.length}</b><span>today</span></div><div><b>${tomorrow.length}</b><span>tomorrow</span></div></div>
+    <h3>Strongest model picks</h3>
+    ${top.length ? `<ul class="sb-top3">${top.map((x) => `<li><a href="/match/${esc(x.m.id)}"><b>${esc(x.m.home.name)} vs ${esc(x.m.away.name)}</b><span>${esc(x.best.pick)} · ${x.best.pct}% model</span></a></li>`).join("")}</ul>` : `<p class="sb-q-sub">No picks above the minimum right now.</p>`}`;
+}
+function wireCalc() {
+  const o = $("#calcOdds"), s = $("#calcStake"), out = $("#calcOut");
+  if (!o || !s || !out) return;
+  const update = () => { const v = (+o.value || 0) * (+s.value || 0); out.textContent = v.toFixed(2); };
+  o.addEventListener("input", update);
+  s.addEventListener("input", update);
+  update();
+}
+
 async function loadData() {
   stage.innerHTML = `<div class="sb-card sb-loading"><div class="sb-pulse" aria-hidden="true"><i></i><i></i><i></i></div><h2>Loading today's matches</h2><p class="sb-q-sub">One moment.</p></div>`;
   try {
@@ -296,6 +318,8 @@ async function loadData() {
     state.data = await r.json();
   } catch { state.data = null; }
   render();
+  renderGlance();
 }
 renderMine();
+wireCalc();
 loadData();
