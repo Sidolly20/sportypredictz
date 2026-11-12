@@ -234,6 +234,7 @@ app.get("/match/:id/:slug?", async (req, res, next) => {
 app.get("/track-record", route(({ ctx }) => V.trackRecordPage(ctx, { record: ctx.record }), { maxAge: 300, needsRecord: true }));
 app.get("/live", route(({ ctx, board }) => V.livePage(ctx, { live: ctx.liveItems, upcoming: board.matches.filter((m) => !m.res || m.res.state === "pre") }), { maxAge: 10 }));
 app.get("/results", route(async ({ ctx }) => V.resultsPage(ctx, { results: (await getResults()).results || [] }), { maxAge: 60, needsRecord: true }));
+app.get("/advertise", route(({ ctx }) => V.advertisePage(ctx), { maxAge: 3600 }));
 app.get("/favourites", route(({ ctx }) => V.favouritesPage(ctx), { maxAge: 300 }));
 for (const slug of Object.keys(PAGES)) app.get(`/${slug}`, route(({ ctx }) => V.staticPage(ctx, slug), { maxAge: 3600 }));
 
@@ -286,7 +287,7 @@ app.get("/sitemap.xml", async (req, res) => {
     ["/", 1.0], ["/build-slip", 0.9], ["/football-predictions-today", 0.9], ["/football-predictions-tomorrow", 0.9], ["/predictions", 0.8],
     ...CATEGORIES.filter((c) => c.kind === "acca" || c.kind === "acca-hub" || rankPicks(c.slug, board.matches.filter((m) => !m.res || m.res.state === "pre")).length >= 3).map((c) => [`/predictions/${c.slug}`, 0.8]),
     ["/predictions/weekend-match-predictions", 0.9],
-    ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6],
+    ["/leagues", 0.7], ["/results", 0.5], ["/track-record", 0.6], ["/advertise", 0.3],
     ...Object.keys(PAGES).map((s) => [`/${s}`, 0.3]),
     ...[...seenLeagues.values()].map((l) => [leaguePath(l), 0.6]),
     ["/teams", 0.6],
@@ -308,8 +309,8 @@ app.get("/site.webmanifest", (req, res) => {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#06090d",
-    theme_color: "#06090d",
+    background_color: "#0a1020",
+    theme_color: "#0a1020",
     icons: [
       { src: "/assets/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/assets/icon-512.png", sizes: "512x512", type: "image/png" }

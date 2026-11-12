@@ -59,15 +59,15 @@
     const inp = e.target.closest("[data-search]");
     if (!inp) return;
     const q = inp.value.trim().toLowerCase();
-    $$(".mrow[data-search], .prow[data-search]").forEach((r) => { r.hidden = !!q && !r.dataset.search.includes(q); });
-    $$(".lgblock").forEach((blk) => { blk.hidden = !!q && !$(".mrow:not([hidden]), .prow:not([hidden])", blk); if (q && !blk.hidden) blk.open = true; });
+    $$(".fx[data-search], .cx[data-search], .mrow[data-search], .prow[data-search]").forEach((r) => { r.hidden = !!q && !r.dataset.search.includes(q); });
+    $$(".lgblock").forEach((blk) => { blk.hidden = !!q && !$(".fx:not([hidden]), .cx:not([hidden]), .mrow:not([hidden]), .prow:not([hidden])", blk); if (q && !blk.hidden) blk.open = true; });
   });
 
   // ---------- phone rows: show all odds, league sections ----------
   document.addEventListener("click", (e) => {
     const more = e.target.closest(".more");
     if (more) {
-      const row = more.closest(".mrow");
+      const row = more.closest(".fx, .mrow");
       const on = row.classList.toggle("open");
       more.setAttribute("aria-expanded", on ? "true" : "false");
       return;
@@ -322,3 +322,7 @@
     else window.open(url, "_blank", "noopener");
   });
 })();
+
+// Bet types menu: close when tapping elsewhere or pressing Escape.
+document.addEventListener("click", (e) => { const d = document.querySelector(".bt[open]"); if (d && !d.contains(e.target)) d.open = false; });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const d = document.querySelector(".bt[open]"); if (d) d.open = false; } });

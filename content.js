@@ -377,20 +377,34 @@ export const CAT_BY_SLUG = Object.fromEntries(CATEGORIES.map((c) => [c.slug, c])
 
 // ---------- home page ----------
 export const HOME = {
-  title: "Football Predictions Today, Odds and Tips | SportyPredictz",
-  desc: "Free football predictions for today and tomorrow with market odds, win probabilities, over/under goals and both-teams-to-score picks for every match. Live scores and league tables.",
-  how: [
-    "Every match on SportyPredictz comes with two things side by side: the market odds and a probability from a statistical model. When the two disagree, that is usually where the interesting picks are.",
-    "We do not sell tips and we do not take bets. The site is a quick way to check the numbers before you decide anything, with the 1X2 result, goals and both-teams-to-score markets all in one place.",
-    "The odds are a single market consensus price per outcome, not a bookmaker-by-bookmaker comparison. We say so on every page, because it matters."
+  title: "Football Predictions Today: Free Tips & Odds | SportyPredictz",
+  desc: "Free football predictions for today and tomorrow: win probabilities, over/under and BTTS picks with odds for every match, live scores and a public track record.",
+  // Evergreen guide shown on the home page. Plain text only; links are added in views.js.
+  guide: [
+    { h: "How we make football predictions", p: [
+      "Every match on SportyPredictz carries two sets of numbers side by side. The first is the bookmaker price, with the bookmaker's margin taken out so it reads as a fair chance. The second is a statistical model's own estimate of how likely each result is: a home win, a draw, an away win, goals and both teams to score. When the two agree, the price is fair. When they disagree, that match deserves a closer look.",
+      "A pick is only published when the model's chance clears a minimum for its market: 45% for a match result, 55% for goals and both teams to score, and 70% for double chance. A match that does not clear the bar is shown without a pick, instead of being forced into one."
+    ] },
+    { h: "How to read a prediction card", p: [
+      "The percentage beside each team is the model's chance of that team winning, and the bar underneath splits the match into home win, draw and away win. Our pick is the single strongest market for that match, shown with the model's chance and the odds. Tap All odds to see the match result, goals, both teams to score and double chance prices.",
+      "A high chance is not the same as good value. A 75% pick at odds of 1.25 pays very little, while a 45% pick at 2.60 can be worth more over time. That is why the bet-type pages show our chance and the market's own chance on the same line."
+    ] },
+    { h: "We publish our record", p: [
+      "Every pick is saved before kick-off and marked won or lost against the 90-minute score. The track record page lists every settled pick, month by month, with the wins and the losses together. Nothing is removed afterwards."
+    ] },
+    { h: "Using predictions responsibly", p: [
+      "SportyPredictz is an information site. It does not take bets and does not promise winners. Predictions are estimates, team news can change a match after the numbers are set, and odds move. Bet only where it is legal, only if you are 18 or older, and only with money you can afford to lose."
+    ] }
   ],
   faq: [
-    ["Are the predictions free?", "Yes. Everything on SportyPredictz is free to read."],
-    ["Can I bet on this site?", "No. SportyPredictz is an information site and does not take bets. Use a licensed bookmaker where gambling is legal."],
-    ["How accurate are the predictions?", "Nobody can promise accuracy in football. The model gives probabilities, not certainties. A 70% pick still loses 3 times in 10."],
-    ["How often is the data updated?", "Odds and probabilities refresh every few minutes through the day. Live scores update about every 30 seconds."],
-    ["What does the model edge number mean?", "Model probability multiplied by the odds, minus 1. It shows where the model and the market disagree."],
-    ["Which time zone are the kick-off times in?", "Your own. We convert every kick-off to the time zone of your device."]
+    ["Are the football predictions on SportyPredictz free?", "Yes. Reading every prediction, odds table, league page and the track record is free, with no account and no subscription."],
+    ["How accurate are the predictions?", "Nobody can promise accuracy in football. The model gives probabilities, not certainties, so a 70% pick still loses three times in ten. The track record page shows how every settled pick performed, wins and losses together."],
+    ["How are the predictions made?", "We take bookmaker odds, remove the margin to get a fair chance, and compare it with a statistical model's own probability for the result, the goals lines and both teams to score. A pick appears only when the model's chance clears a minimum for that market."],
+    ["What is a banker pick?", "A banker is the match where the model is most sure of the result, rated at 62% or higher for one side. Safe does not mean certain, and short odds mean a small return when it lands."],
+    ["What does market chance mean?", "It is the chance hidden in the bookmaker's price once the margin is removed. When our chance is higher than the market's, the price may be generous. When it is lower, the market is already shorter than our numbers."],
+    ["Can I bet on SportyPredictz?", "No. SportyPredictz does not take bets. Use a licensed bookmaker where gambling is legal, and only if you are 18 or older."],
+    ["How often is the data updated?", "Odds and probabilities refresh every few minutes through the day, and live scores update about every 15 to 30 seconds."],
+    ["Which time zone are kick-off times in?", "Your own. Each kick-off is converted to the time zone of your device. Pages written for search engines show West Africa Time until your browser converts them."]
   ]
 };
 
