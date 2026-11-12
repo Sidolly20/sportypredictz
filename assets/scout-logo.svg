@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Scout AI logo">
-<rect width="64" height="64" rx="18" fill="#06090d"/>
-<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="#b6ff3b" stroke-opacity=".35" stroke-width="2"/>
-<circle cx="30" cy="34" r="15" fill="none" stroke="#b6ff3b" stroke-width="4"/>
-<path d="M30 17v8M30 43v8M13 34h8M39 34h8" stroke="#b6ff3b" stroke-width="3.5" stroke-linecap="round"/>
-<circle cx="30" cy="34" r="4" fill="#b6ff3b"/>
-<path d="M48 10l1.8 4.2L54 16l-4.2 1.8L48 22l-1.8-4.2L42 16l4.2-1.8z" fill="#4dd6ff"/>
+<rect width="64" height="64" rx="18" fill="#0a1020"/>
+<rect x="2" y="2" width="60" height="60" rx="16" fill="none" stroke="#d8b467" stroke-opacity=".35" stroke-width="2"/>
+<circle cx="30" cy="34" r="15" fill="none" stroke="#d8b467" stroke-width="4"/>
+<path d="M30 17v8M30 43v8M13 34h8M39 34h8" stroke="#d8b467" stroke-width="3.5" stroke-linecap="round"/>
+<circle cx="30" cy="34" r="4" fill="#d8b467"/>
+<path d="M48 10l1.8 4.2L54 16l-4.2 1.8L48 22l-1.8-4.2L42 16l4.2-1.8z" fill="#8fb3e8"/>
 </svg>
