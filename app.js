@@ -280,7 +280,7 @@
       markStalled();
     } catch { /* keep what is on screen */ }
   }
-  setInterval(pollLive, 15 * 1000);
+  setInterval(pollLive, 30 * 1000);
 
   // ---------- start ----------
   localTimes();

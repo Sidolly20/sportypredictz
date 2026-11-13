@@ -1933,3 +1933,4 @@ h3 { font-family: var(--display); }
 .leg { grid-template-columns: 52px minmax(0, 1fr) auto auto; gap: 8px; }
 .leg .legt .w-top { font-size: .72rem; text-align: center; }
 .leg[data-state="pre"] .legr { display: none; }
+.lgb-fx[data-state="wait"] .pst { display: none; }

@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
+import { API_BASE, DEMO, status, upstreamBackoff, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
 import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks, marketsOf, esc } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES, TEAMS, TEAM_BY_SLUG } from "./content.js";
 import * as V from "./views.js";
@@ -113,9 +113,14 @@ function liveItems(matches, liveList) {
 
 // Games that kicked off over 100 minutes ago but still have no final score in the live or results lists:
 // ask odds-api for that match directly (at most 8 a page, cached by the odds-api client).
+const lookedUp = new Map(); // match id -> when we last asked odds-api for its final score
 async function finalScoresFor(matches, liveList, resultList) {
   const now = Date.now();
-  const stuck = annotate(matches, liveList, resultList).filter((m) => m.res.state === "wait" && m.ts && now - m.ts > 100 * 60e3).slice(0, 8);
+  if (upstreamBackoff()) return []; // odds-api is capped or failing: do not pile more calls on it
+  const stuck = annotate(matches, liveList, resultList)
+    .filter((m) => m.res.state === "wait" && m.ts && now - m.ts > 100 * 60e3 && now - m.ts < 24 * 3600e3 && now - (lookedUp.get(m.id) || 0) > 10 * 60e3)
+    .slice(0, 4);
+  for (const m of stuck) lookedUp.set(m.id, now);
   if (!stuck.length) return [];
   const got = await Promise.all(stuck.map((m) => withTimeout(getMatch(m.id).catch(() => null), 3000, null)));
   return got

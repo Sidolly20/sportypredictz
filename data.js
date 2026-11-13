@@ -14,7 +14,7 @@ export const DEMO = !API_KEY;
 const UPSTREAM_TIMEOUT_MS = 70 * 1000;
 const BOARD_DAYS = Number(process.env.BOARD_DAYS || 3);     // today + next 2 days
 const BOARD_PAGES = Number(process.env.BOARD_PAGES || 3);   // 20 matches per page per day
-const BOARD_TTL_MS = Number(process.env.BOARD_TTL_MS || 8 * 60 * 1000);
+const BOARD_TTL_MS = Number(process.env.BOARD_TTL_MS || 15 * 60 * 1000);
 const KEEP_STARTED_MS = 10 * 3600 * 1000; // matches stay listed for 10 hours after kick-off
 
 export const status = { lastOk: null, lastError: null, lastStatus: null, live: null };
@@ -191,10 +191,21 @@ function matchToBoard(m) {
 }
 
 // ---------- live scores ----------
+// Save odds-api calls. Live scores are asked for every 45 seconds while a match is on (or about to start),
+// and only every 5 minutes when nothing is on. If odds-api says "capped" (429) or is failing (5xx), stop asking for 5 minutes.
+let liveBackoffUntil = 0;
+let lastGoodLive = null;
+function liveTtlSeconds() {
+  const now = Date.now();
+  const busy = board.matches.some((m) => m.ts && m.ts - now < 10 * 60e3 && now - m.ts < 2.75 * 3600e3);
+  return busy ? 45 : 300;
+}
+export const upstreamBackoff = () => Date.now() < liveBackoffUntil;
 export async function getLive() {
   if (DEMO) return demoLive();
+  if (Date.now() < liveBackoffUntil) return lastGoodLive || { matches: [], error: true, backoff: true };
   try {
-    const d = await callOddsApi("/v1/live", 12, 60);
+    const d = await callOddsApi("/v1/live", liveTtlSeconds(), 120);
     // A football match is over about 2 hours after kick-off (90 min + half-time + added time). Extra time and
     // penalties in a cup can stretch it to about 2h 40m. Anything the feed still calls "live" after 2h 45m is old data.
     // If the feed says otherwise, the entry is old and is ignored.
@@ -207,9 +218,12 @@ export async function getLive() {
     hydrateStarted(matches);
     // Shown on /api/status so we can see WHY a started match has no score (no keys in it).
     status.live = { at: new Date().toISOString(), source: d.source ?? null, count: matches.length, withScore: matches.filter((m) => m.score && m.score.home != null).length, odds_api_says: d.diag ?? null, ignoredAsOld: !fresh };
+    lastGoodLive = { ...d, matches };
     return { ...d, matches };
   } catch (err) {
     status.live = { at: new Date().toISOString(), error: err.message };
+    const code = err instanceof UpstreamError ? err.code : 0;
+    if (code === 429 || code >= 500) liveBackoffUntil = Date.now() + 5 * 60e3;
     return { matches: [], error: true };
   }
 }
@@ -218,7 +232,7 @@ export async function getLive() {
 export async function getResults() {
   if (DEMO) return { ...demoResults(), results: demoResults().results.map(normMatch) };
   try {
-    const d = await callOddsApi("/v1/results?limit=50", 60, 900);
+    const d = await callOddsApi("/v1/results?limit=100", 180, 900);
     // Backup results (football-data) use their own ids. Map them to our board ids by team names, like live scores.
     const results = (d.results || []).map(normMatch).map(matchToBoard);
     hydrateStarted(results.filter((x) => x.ts >= Date.now() - 24 * 3600e3));

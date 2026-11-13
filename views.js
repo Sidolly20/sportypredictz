@@ -1766,7 +1766,7 @@ export function matchPage(ctx, { m, related, standings = null, nextFor = null })
 
 export function livePage(ctx, { live, upcoming = [] }) {
   const body = `${crumbs([["Home", "/"], ["Live scores", "/live"]])}
-  ${pageHead("Live football scores", "Updates by itself every 15 seconds. Each card shows whether our pick is winning.")}
+  ${pageHead("Live football scores", "Updates by itself every 30 seconds. Each card shows whether our pick is winning.")}
   <div id="liveList" data-live-page>${liveList(live)}</div>
   ${upcoming.length ? `<section class="block"><div class="block-head"><h2>Kicking off next</h2><a href="/football-predictions-today">All matches →</a></div><div class="reclist">${upcoming.slice(0, 6).map((m) => { const tp = topPick(m); return `<a class="rec" href="${matchPath(m)}"><span class="rec-lg">${esc(m.league.name)} · ${timeEl(m, "w-top")}</span><span class="rec-m"><span>${esc(m.home.name)}</span><b><i>v</i></b><span>${esc(m.away.name)}</span></span>${tp ? `<span class="rec-p"><span class="pkline"><small>Pick</small><b>${esc(tp.label)}</b><i>${Math.round(tp.pct)}%</i></span></span>` : ""}</a>`; }).join("")}</div></section>` : ""}`;
   return { title: `Live Football Scores | ${SITE_NAME}`, desc: "Live football scores from leagues around the world, updated every 30 seconds.", path: "/live", body, noindex: true, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Live scores", "/live"]])] };
