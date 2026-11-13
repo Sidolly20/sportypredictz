@@ -10,11 +10,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { API_BASE, DEMO, status, boardInfo, getBoard, getLive, getResults, getMatch, getStandings, standingsShape, startBoardLoop, UpstreamError, rememberFinished, getRecord, getWeekend, weekendKeys, dayKeyOf } from "./data.js";
-import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks } from "./logic.js";
+import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLeague, slugify, annotate, scoreMap, rankPicks, marketsOf, esc } from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, PAGES, TEAMS, TEAM_BY_SLUG } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
 import { storeStatus, startStoreJanitor, loadSnapshotNear, loadMatchesBetween } from "./store.js";
+import { accaStatus, loadAccas, setAccaContext, resolveAcca, recordFor, addLeg, removeLeg, resetAuto } from "./accas.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -134,6 +135,7 @@ function route(build, { maxAge = 60, needsBoard = false, needsRecord = false } =
       if (needsRecord) ctx.record = await getRecord();
       logPicks(board.matches); settleFinished(board.matches);
       ctx.scoresFor = (m) => annotate([m], live.matches, done.results)[0];
+      setAccaContext({ matches: board.matches, scoresFor: ctx.scoresFor });
       if (needsBoard && !board.matches.length) {
         // No matches yet (odds-api is probably waking up). Show a friendly page that reloads itself.
         return res.status(503).set({ "Cache-Control": "no-store", "Retry-After": "20" }).type("html").send(V.layout(ctx, V.warmingPage()));
@@ -274,7 +276,7 @@ app.get("/api/live", async (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
-  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), store: storeStatus, pickLog: LOG_ON ? logStatus : "off (set SUPABASE_URL and SUPABASE_SERVICE_KEY to turn on)", ...status });
+  res.json({ mode: DEMO ? "demo" : "live", upstream: API_BASE.replace(/^https?:\/\//, ""), assets: ASSET_V, board: boardInfo(), store: storeStatus, accas: accaStatus, pickLog: LOG_ON ? logStatus : "off (set SUPABASE_URL and SUPABASE_SERVICE_KEY to turn on)", ...status });
 });
 
 // Debug: shows the SHAPE of a league table from odds-api (no keys, no secrets). Handy if a table looks empty.
@@ -289,6 +291,99 @@ if (/^google[a-z0-9]+\.html$/i.test(VERIFY_FILE)) {
   app.get(`/${VERIFY_FILE}`, (req, res) => res.type("text/html").send(`google-site-verification: ${VERIFY_FILE}`));
 }
 
+// ---------- admin: set the accumulators by hand ----------
+// Needs ADMIN_PASSWORD in Render > Environment. Without it the page stays switched off.
+const ADMIN_PW = process.env.ADMIN_PASSWORD || "";
+const ADMIN_TOKEN = ADMIN_PW ? crypto.createHmac("sha256", ADMIN_PW).update("sportypredictz-admin-v1").digest("hex") : "";
+const sameStr = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+const cookieOf = (req, name) => { for (const part of String(req.headers.cookie || "").split(";")) { const i = part.indexOf("="); if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim()); } return ""; };
+const isAdmin = (req) => !!ADMIN_TOKEN && sameStr(cookieOf(req, "sp_admin"), ADMIN_TOKEN);
+const loginTries = new Map();
+const adminForm = express.urlencoded({ extended: false, limit: "20kb" });
+const ACCA_CATS = CATEGORIES.filter((c) => c.kind === "acca");
+const ADMIN_CATS = [["1", "Home win"], ["X", "Draw"], ["2", "Away win"], ["1X", "Home or draw"], ["X2", "Draw or away"], ["12", "Home or away"], ["O1.5", "Over 1.5 goals"], ["O2.5", "Over 2.5 goals"], ["U2.5", "Under 2.5 goals"], ["O3.5", "Over 3.5 goals"], ["U3.5", "Under 3.5 goals"], ["GG", "Both teams to score"], ["NG", "Both teams to score: No"]];
+
+async function adminData() {
+  const [board0, live, done0] = await Promise.all([getBoard(), withTimeout(getLive(), 4000, { matches: [] }), withTimeout(getResults(), 4000, { results: [] })]);
+  const board = { ...board0, matches: annotate(board0.matches, live.matches, done0.results) };
+  const scoresFor = (m) => annotate([m], live.matches, done0.results)[0];
+  setAccaContext({ matches: board.matches, scoresFor });
+  return { board, live, scoresFor, upcoming: board.matches.filter((m) => !m.res || m.res.state === "pre") };
+}
+function sendAdmin(req, res, ctx, body, title = "Admin") {
+  res.status(200).set({ "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }).type("html")
+    .send(V.layout(ctx, { title: `${title} | SportyPredictz`, desc: "Admin", path: "/admin", body, noindex: true }));
+}
+const adminBox = (inner) => `<div class="wrap" style="max-width:760px;margin:24px auto;padding:0 14px">${inner}</div>`;
+const adminLogin = (msg = "") => adminBox(`<h1>Admin</h1>${msg ? `<p>${esc(msg)}</p>` : ""}<form method="post" action="/admin/login"><p><label>Password<br><input type="password" name="pw" autocomplete="current-password" required></label></p><p><button class="btn solid" type="submit">Log in</button></p></form>`);
+
+app.get("/admin", async (req, res) => {
+  try {
+    const d = await adminData();
+    const ctx = makeCtx(req, d.board, d.live);
+    if (!ADMIN_PW) return sendAdmin(req, res, ctx, adminBox(`<h1>Admin is off</h1><p>Add an environment variable called <b>ADMIN_PASSWORD</b> in Render (Environment tab), save, and open this page again.</p>`));
+    if (!isAdmin(req)) return sendAdmin(req, res, ctx, adminLogin());
+    const soon = d.upcoming.filter((m) => dayKey(m.ts) <= addDays(todayKey(), 1)).sort((a, b) => a.ts - b.ts);
+    const when = (m) => new Date(m.ts).toLocaleString("en-GB", { timeZone: process.env.SITE_TZ || "Africa/Lagos", weekday: "short", hour: "2-digit", minute: "2-digit" });
+    const eligible = (k) => soon.map((m) => ({ m, d: Object.values(marketsOf(m)).flat().find((x) => x.k === k && Number(x.odd) > 1) }))
+      .filter((x) => x.d).sort((a, b) => (Number(b.d.pct) || 0) - (Number(a.d.pct) || 0));
+    const sections = ACCA_CATS.map((c) => {
+      const a = resolveAcca(c, d.upcoming);
+      const rec = recordFor(c.slug);
+      const legs = a ? a.legs.map((l) => `<li>${esc(l.m.home.name)} v ${esc(l.m.away.name)}: <b>${esc(l.label)}</b> @ ${Number(l.odd).toFixed(2)}${l.m.res && l.m.res.state !== "pre" ? ` <em>(${esc(l.m.res.label)})</em>` : ""}
+        <form method="post" action="/admin/remove" style="display:inline"><input type="hidden" name="slug" value="${esc(c.slug)}"><input type="hidden" name="mid" value="${esc(l.m.id)}"><button type="submit">Remove</button></form></li>`).join("") : "";
+      return `<section id="${esc(c.slug)}" style="margin:26px 0;padding:14px;border:1px solid var(--line);border-radius:14px"><h2>${esc(c.name)}</h2>
+        <p>${a ? `${a.legs.length} legs · total odds <b>${a.total.toFixed(2)}</b> · ${rec && rec.mode === "manual" ? "<b>hand-picked</b>" : "built automatically"}` : "No slip yet (not enough games with prices)."}</p>
+        ${legs ? `<ol>${legs}</ol>` : ""}
+        <form method="get" action="/admin#${esc(c.slug)}"><input type="hidden" name="slug" value="${esc(c.slug)}">
+          <p><select name="cat" style="max-width:100%">${ADMIN_CATS.map(([k, label]) => `<option value="${esc(k)}"${req.query.slug === c.slug && req.query.cat === k ? " selected" : ""}>${esc(label)}</option>`).join("")}</select>
+          <button type="submit">Show games</button></p></form>
+        ${req.query.slug === c.slug && ADMIN_CATS.some(([k]) => k === req.query.cat) ? (() => {
+          const list = eligible(String(req.query.cat));
+          return list.length ? `<p>${list.length} games for this bet (strongest first). Tap Add on the ones you want.</p><ul style="list-style:none;padding:0">${list.map(({ m, d: x }) => `<li style="margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:10px"><b>${esc(m.home.name)} v ${esc(m.away.name)}</b><br><small>${esc(m.league.name)} · ${esc(when(m))}</small><br>${esc(x.pick)} @ ${Number(x.odd).toFixed(2)}${Number.isFinite(Number(x.pct)) ? ` · model ${Math.round(x.pct)}%` : ""}
+            <form method="post" action="/admin/add" style="display:inline"><input type="hidden" name="slug" value="${esc(c.slug)}"><input type="hidden" name="cat" value="${esc(req.query.cat)}"><input type="hidden" name="choice" value="${m.id}|${esc(x.k)}"><button class="btn solid" type="submit">Add</button></form></li>`).join("")}</ul>` : `<p>No games with a price for this bet yet (today and tomorrow, not started). Try another bet, or check again later.</p>`;
+        })() : ""}
+        ${rec && rec.mode === "manual" ? `<form method="post" action="/admin/reset"><input type="hidden" name="slug" value="${esc(c.slug)}"><button type="submit">Go back to the automatic slip</button></form>` : ""}
+      </section>`;
+    }).join("");
+    sendAdmin(req, res, ctx, adminBox(`<h1>Admin: accumulators</h1><p>A hand-picked slip replaces the automatic one for today. Adding a pick keeps the legs already there. Picking a second bet from the same game replaces the first. Today's slips only; tomorrow starts automatic again.</p>${sections}<form method="post" action="/admin/logout"><button type="submit">Log out</button></form>`), "Admin accumulators");
+  } catch (e) { console.error("Admin error:", e.message); res.status(500).send("Admin page error"); }
+});
+app.post("/admin/login", adminForm, async (req, res) => {
+  const ip = req.ip || "x", now = Date.now();
+  const t = (loginTries.get(ip) || []).filter((x) => now - x < 10 * 60e3);
+  if (!ADMIN_PW || t.length >= 6) return res.status(429).send("Too many tries. Wait ten minutes.");
+  if (!sameStr(crypto.createHash("sha256").update(String(req.body.pw || "")).digest("hex"), crypto.createHash("sha256").update(ADMIN_PW).digest("hex"))) {
+    loginTries.set(ip, [...t, now]);
+    return res.status(401).set("Cache-Control", "no-store").send("Wrong password. Go back and try again.");
+  }
+  res.set("Set-Cookie", `sp_admin=${ADMIN_TOKEN}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=${30 * 86400}${req.protocol === "https" ? "; Secure" : ""}`);
+  res.redirect(303, "/admin");
+});
+app.post("/admin/logout", adminForm, (req, res) => {
+  res.set("Set-Cookie", "sp_admin=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0");
+  res.redirect(303, "/admin");
+});
+const adminAction = (fn) => [adminForm, async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).send("Please log in at /admin first.");
+  try {
+    const cat = ACCA_CATS.find((c) => c.slug === req.body.slug);
+    if (!cat) return res.status(400).send("Unknown accumulator.");
+    const d = await adminData();
+    const ok = fn(cat, d, req.body);
+    const back = ADMIN_CATS.some(([k]) => k === req.body.cat) ? `/admin?slug=${encodeURIComponent(cat.slug)}&cat=${encodeURIComponent(req.body.cat)}#${cat.slug}` : `/admin#${cat.slug}`;
+    res.redirect(303, ok === false ? "/admin?e=1" : back);
+  } catch (e) { console.error("Admin action:", e.message); res.status(500).send("Admin action failed"); }
+}];
+app.post("/admin/add", ...adminAction((cat, d, b) => {
+  const [mid, k] = String(b.choice || "").split("|");
+  const m = d.upcoming.find((x) => String(x.id) === mid);
+  return m ? addLeg(cat, d.upcoming, m, k) : false;
+}));
+app.post("/admin/remove", ...adminAction((cat, d, b) => removeLeg(cat, d.upcoming, b.mid)));
+app.post("/admin/reset", ...adminAction((cat) => { resetAuto(cat); }));
+
+
 app.get("/healthz", (req, res) => res.send("ok"));
 
 // ---------- search-engine files ----------
@@ -296,7 +391,7 @@ app.get("/robots.txt", (req, res) => {
   const origin = SITE_URL || `${req.protocol}://${req.get("host")}`;
   res.type("text/plain").send(DEMO
     ? "User-agent: *\nDisallow: /\n"
-    : `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /favourites\n\nSitemap: ${origin}/sitemap.xml\n`);
+    : `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nDisallow: /favourites\n\nSitemap: ${origin}/sitemap.xml\n`);
 });
 
 app.get("/sitemap.xml", async (req, res) => {
@@ -428,12 +523,16 @@ app.listen(PORT, () => {
   startBoardLoop();
   setTimeout(pingIndexNow, 90 * 1000).unref();
   startStoreJanitor();
+  loadAccas();
   // Every 3 minutes, even with no visitors: save picks before kick-off and settle finished matches.
   const tick = async () => {
     try {
       const [b0, live, done] = await Promise.all([getBoard(), getLive(), getResults()]);
       const matches = annotate(b0.matches, live.matches, done.results);
       rememberFinished(matches);
+      setAccaContext({ matches, scoresFor: (m) => annotate([m], live.matches, done.results)[0] });
+      const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
+      for (const c of CATEGORIES) if (c.kind === "acca") resolveAcca(c, upcoming);
       await logPicks(matches);
       await settleFinished(matches);
     } catch (e) { console.error("Background tick:", e.message); }

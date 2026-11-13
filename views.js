@@ -6,6 +6,7 @@ import {
 , kickLabel} from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis, TEAMS, CONTACT } from "./content.js";
 import { sponsorFor, MEDIA_KIT, PLACEMENTS } from "./sponsors.js";
+import { resolveAcca } from "./accas.js";
 
 // Optional analytics (GoatCounter: no cookies, counts visits only). Off unless GOATCOUNTER_CODE is set in Render.
 const GC_CODE = /^[a-z0-9-]{2,40}$/i.test(process.env.GOATCOUNTER_CODE || "") ? process.env.GOATCOUNTER_CODE : "";
@@ -57,7 +58,7 @@ const scEl = (m, side) => `<b class="sc" data-side="${side}">${scNum(m, side)}</
 const pstEl = (m, k) => {
   if (!k) return "";
   const ps = pickState(m, k);
-  return `<span class="pst ${ps || "pend"}">${ps ? PICK_TXT[ps] : resOf(m).state === "wait" ? "Kicked off" : "Pending"}</span>`;
+  return `<span class="pst ${ps || "pend"}">${ps ? PICK_TXT[ps] : resOf(m).state === "wait" ? (resOf(m).label === "LIVE" ? "In play" : "Score updating") : "Pending"}</span>`;
 };
 function whenEl(m, k, withChip = true) {
   const r = resOf(m);
@@ -395,7 +396,7 @@ function countsFor(matches) {
   const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
   let accas = 0;
   for (const c of CATEGORIES) {
-    if (c.kind === "acca") { counts[c.slug] = buildAcca(upcoming, c.acca.target, c.acca.legs) ? 1 : 0; accas += counts[c.slug]; }
+    if (c.kind === "acca") { counts[c.slug] = resolveAcca(c, upcoming) ? 1 : 0; accas += counts[c.slug]; }
     else if (c.kind !== "acca-hub") counts[c.slug] = rankPicks(c.slug, matches).filter((x) => !x.weak).length;
   }
   counts["accumulator-tips"] = accas;
@@ -417,11 +418,19 @@ function pickCard(it) {
   </a>`;
 }
 
+const legWhen = (m) => {
+  const r = resOf(m);
+  if (r.state !== "pre") return `<span class="w-top">${esc(r.label)}</span>`;
+  return `${dayKey(m.ts) !== todayKey() ? `<small>${esc(shortDate(m.ts))}</small>` : ""}${timeEl(m, "w-top")}`;
+};
+const accaNote = (acca) => acca.manual ? `<p class="acca-note">Hand-picked by our team.</p>`
+  : acca.tier ? `<p class="acca-note">Built from the best games available today, so confidence is lower than on a normal day.</p>` : "";
 const accaHtml = (name, acca, href = "") => acca
-  ? `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2><span class="acca-total">${plural(acca.legs.length, "leg")} · Total odds <b>${acca.total.toFixed(2)}</b></span></div>
-      ${acca.legs.map((l) => `<div class="leg" ${rowAttrs(l.m, l.k)}><span class="legt">${dayKey(l.m.ts) !== todayKey() ? `<small>${esc(shortDate(l.m.ts))}</small>` : ""}${timeEl(l.m)}</span><a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="mono">${l.calc ? "~" : ""}${fmtOdd(l.odd)}</span></div>`).join("")}
-      <button type="button" class="btn solid" data-acca='${esc(JSON.stringify(acca.legs.map((l) => ({ mid: l.m.id, k: l.k, odd: l.odd.toFixed(2), pick: l.label, teams: `${l.m.home.name} v ${l.m.away.name}` }))))}'>Add all to pick slip</button></section>`
-  : `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2></div><div class="empty">Not enough strong picks to build this acca right now.</div></section>`;
+  ? `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2><span class="acca-total">${plural(acca.legs.length, "leg")} · Total odds <b>${acca.total.toFixed(2)}</b>${acca.result ? ` <span class="pst ${acca.result}">${acca.result === "won" ? "Won" : "Lost"}</span>` : ""}</span></div>
+      ${accaNote(acca)}
+      ${acca.legs.map((l) => `<div class="leg" ${rowAttrs(l.m, l.k)}><span class="legt">${legWhen(l.m)}</span><a href="${matchPath(l.m)}"><b>${esc(l.m.home.name)} v ${esc(l.m.away.name)}</b><small>${esc(l.label)} · ${Math.round(l.pct)}% model</small></a><span class="legr"><b class="sc" data-side="h">${scNum(l.m, "h")}</b><i>–</i><b class="sc" data-side="a">${scNum(l.m, "a")}</b>${pstEl(l.m, l.k)}</span><span class="mono">${l.calc ? "~" : ""}${fmtOdd(l.odd)}</span></div>`).join("")}
+      <button type="button" class="btn solid" data-acca='${esc(JSON.stringify(acca.legs.map((l) => ({ mid: l.m.id, k: l.k, odd: Number(l.odd).toFixed(2), pick: l.label, teams: `${l.m.home.name} v ${l.m.away.name}` }))))}'>Add all to pick slip</button></section>`
+  : `<section class="acca"><div class="acca-head"><h2>${href ? `<a href="${href}">${esc(name)}</a>` : esc(name)}</h2></div><div class="empty">There are not enough games with prices to build this acca right now. It fills in by itself as soon as more games are listed.</div></section>`;
 
 // Bet-type card: one pick, the rule showing our chance against the market's, odds and result.
 function pickRow(it) {
@@ -615,7 +624,7 @@ const itemListLd = (ctx, name, ms) => ({
 
 function slipsTeaser(upcoming) {
   const tiles = CATEGORIES.filter((c) => c.kind === "acca").map((c) => {
-    const a = buildAcca(upcoming, c.acca.target, c.acca.legs);
+    const a = resolveAcca(c, upcoming);
     if (!a) return `<a class="slipc off" href="/predictions/${c.slug}"><b>${esc(c.name)}</b><span>Building as more strong picks appear</span></a>`;
     const chance = Math.round(a.legs.reduce((p, l) => p * (l.pct / 100), 1) * 100);
     return `<a class="slipc" href="/predictions/${c.slug}"><small>${a.legs.length} picks</small><strong>${a.total.toFixed(2)}</strong><b>${esc(c.name)}</b><span>Combined model chance about ${chance}%</span></a>`;
@@ -865,11 +874,11 @@ export function categoryPage(ctx, { cat, matches }) {
   const upcoming = matches.filter((m) => !m.res || m.res.state === "pre");
   if (cat.kind === "acca-hub") {
     const four = CATEGORIES.filter((c) => c.kind === "acca");
-    const built = four.map((c) => ({ c, acca: buildAcca(upcoming, c.acca.target, c.acca.legs) }));
+    const built = four.map((c) => ({ c, acca: resolveAcca(c, upcoming) }));
     count = built.filter((x) => x.acca).length;
     list = built.map(({ c, acca }) => accaHtml(c.name, acca, `/predictions/${c.slug}`)).join("");
   } else if (cat.kind === "acca") {
-    const acca = buildAcca(upcoming, cat.acca.target, cat.acca.legs);
+    const acca = resolveAcca(cat, upcoming);
     count = acca ? 1 : 0;
     list = accaHtml(cat.name, acca);
   } else {
@@ -986,25 +995,41 @@ function leagueFeedItem(m) {
   const tp = topPick(m);
   const mk = marketsOf(m);
   const pct = tp ? Math.round(tp.pct) : null;
-  return `<a class="lgb-fx" href="${matchPath(m)}">
-    <span class="lgb-time">${kickLabel(m.ts)}</span>
-    <span class="lgb-teams"><span>${crest(m.home)}${esc(m.home.name)}</span><span>${crest(m.away)}${esc(m.away.name)}</span></span>
-    <span class="lgb-read">${splitBar(mk) || ""}${tp ? `<span class="lgb-pick"><small>Model</small>${esc(tp.label)} <b>${pct}%</b></span>` : `<span class="lgb-pick none">No clear pick</span>`}</span>
+  const pk = tp ? tp.k : null;
+  const r = resOf(m);
+  const when = r.state === "pre"
+    ? `<time class="lgb-time w-top" datetime="${esc(m.kickoff || "")}" data-t="hm">${kickLabel(m.ts)}</time>`
+    : `<span class="lgb-time w-top">${esc(r.label)}</span>`;
+  return `<a class="lgb-fx" ${rowAttrs(m, pk)} href="${matchPath(m)}">
+    ${when}
+    <span class="lgb-teams"><span>${crest(m.home)}<span class="nm">${esc(m.home.name)}</span>${scEl(m, "h")}</span><span>${crest(m.away)}<span class="nm">${esc(m.away.name)}</span>${scEl(m, "a")}</span></span>
+    <span class="lgb-read">${splitBar(mk) || ""}${tp ? `<span class="lgb-pick"><small>Model</small>${esc(tp.label)} <b>${pct}%</b>${pstEl(m, pk)}</span>` : `<span class="lgb-pick none">No clear pick</span>`}</span>
     <span class="lgb-go" aria-hidden="true">›</span>
   </a>`;
 }
 
-function leagueFeed(matches) {
-  if (!matches.length) return `<div class="empty">Nothing scheduled in the next few days.</div>`;
+function leagueFeed(matches, recent = []) {
+  const sorted = matches.slice().sort((a, b) => a.ts - b.ts);
+  const started = sorted.filter((m) => resOf(m).state !== "pre");
+  const seen = new Set(started.map((m) => m.id));
+  const played = [...started, ...recent.filter((m) => !seen.has(m.id) && m.ts >= Date.now() - 7 * 864e5 && resOf(m).state !== "pre")]
+    .sort((a, b) => b.ts - a.ts);
+  const ahead = sorted.filter((m) => resOf(m).state === "pre");
   const days = new Map();
-  for (const m of matches.slice().sort((a, b) => a.ts - b.ts)) {
+  for (const m of ahead) {
     const k = dayKey(m.ts);
     days.set(k, [...(days.get(k) || []), m]);
   }
-  return [...days.entries()].map(([k, list]) => `<div class="lgb-day">
+  const playedHtml = played.length ? `<div class="lgb-day">
+      <h3><span>Live and played</span><small>${played.length} ${played.length === 1 ? "match" : "matches"}</small></h3>
+      <div class="lgb-list">${played.map(leagueFeedItem).join("")}</div>
+    </div>` : "";
+  const aheadHtml = [...days.entries()].map(([k, list]) => `<div class="lgb-day">
       <h3><span>${esc(longDate(list[0].ts))}</span><small>${list.length} ${list.length === 1 ? "match" : "matches"}</small></h3>
       <div class="lgb-list">${list.map(leagueFeedItem).join("")}</div>
     </div>`).join("");
+  if (!playedHtml && !aheadHtml) return `<div class="empty">Nothing scheduled in the next few days.</div>`;
+  return playedHtml + aheadHtml;
 }
 
 
@@ -1065,7 +1090,7 @@ export function leaguePage(ctx, { league, matches, standings, allLeagues, recent
     ${best ? `<section class="lgb-strip"><h2>Strongest model picks</h2>${best}</section>` : ""}
     <div class="lgb-grid">
       <div class="lgb-main">
-        <section class="lgb-section"><h2>Fixtures</h2>${leagueFeed(matches)}</section>
+        <section class="lgb-section"><h2>Fixtures</h2>${leagueFeed(matches, recent)}</section>
         ${weekHtml(league, recent, matches, ctx)}
         ${moversHtml(standings, snapshot)}
         ${leaguePulse(league, [...matches, ...recent], standings, ctx)}
@@ -1702,9 +1727,9 @@ export function matchPage(ctx, { m, related, standings = null, nextFor = null })
   <header class="mh5">
     <p class="mh5-l"><a href="${lgHref}">${lgIcon(m.league)}<span>${esc(m.league.name)}</span></a><time datetime="${esc(m.kickoff || "")}">${esc(nice)}</time></p>
     <h1>${esc(h1)}</h1>
-    <div class="mh5-board">
+    <div class="mh5-board" ${rowAttrs(m, bs ? bs.k : null)}>
       <div class="mh5-t">${crest(m.home)}<span>${esc(m.home.name)}</span></div>
-      <div class="mh5-mid">${hasScore ? `<b class="mh5-sc">${rs.h}<i>-</i>${rs.a}</b>` : `<b class="mh5-sc">${timeEl(m, "mh5-ko")}</b>`}<small>${rs.state === "pre" ? "kick-off" : esc(rs.label)}</small></div>
+      <div class="mh5-mid"><b class="mh5-ko-wrap"><b class="mh5-sc">${timeEl(m, "mh5-ko")}</b></b><b class="mh5-sc mh5-live"><span class="sc" data-side="h">${scNum(m, "h")}</span><i>-</i><span class="sc" data-side="a">${scNum(m, "a")}</span></b><small class="w-top">${rs.state === "pre" ? "kick-off" : esc(rs.label)}</small></div>
       <div class="mh5-t">${crest(m.away)}<span>${esc(m.away.name)}</span></div>
     </div>
   </header>

@@ -247,7 +247,7 @@ export function scoreInfo(m, lv, rs, now = Date.now()) {
     const [h, a] = scoreOfRaw(done);
     if (h !== null && a !== null) return { state: "ft", h, a, label: "FT" };
   }
-  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < PLAY_MS ? "Started" : "Result pending" };
+  if (m.ts && m.ts <= now) return { state: "wait", h: null, a: null, label: now - m.ts < PLAY_MS ? "LIVE" : "Score updating" };
   return { state: "pre", h: null, a: null, label: "" };
 }
 
@@ -270,7 +270,9 @@ export function annotate(matches, liveList, resultList, now = Date.now()) {
   return matches.map((m) => {
     // Match a finished result by id first, then by team names and kick-off time (results may carry another feed's id).
     const r = R.get(Number(m.id)) || (m.ts ? list.find((x) => sameFixture(x, m)) : null);
-    return { ...m, res: scoreInfo(m, L.get(Number(m.id)), r, now) };
+    // The live feed can number the same match differently from the board. Match it by id first, then by team names + kick-off.
+    const lv = L.get(Number(m.id)) || (m.ts ? (liveList || []).find((x) => sameFixture(x, m)) : null);
+    return { ...m, res: scoreInfo(m, lv, r, now) };
   });
 }
 
@@ -467,4 +469,69 @@ export function buildAcca(matches, target, maxLegs) {
   }
   const r = accaFrom(matches, target, cap);
   return r ? { ...r, day: null } : null;
+}
+
+// ---------- accumulators that do not give up ----------
+// buildAcca (above) is the careful version. If it finds nothing, buildAccaSure relaxes the rules a step at a time
+// (lower chance limits, wider odds, more picks from one league) until it can build the slip. It only returns null
+// when there are too few matches with prices to reach the target at all.
+const ACCA_TIERS = [
+  { win: 50, dc: 70, o15: 75, o25: 58, gg: 55, lo: 1.05, hi: 3.5, per: 2, ratio: 0.85, extra: 2 },
+  { win: 40, dc: 60, o15: 65, o25: 50, gg: 50, lo: 1.03, hi: 4, per: 3, ratio: 0.8, extra: 3 },
+  { any: true, lo: 1.02, hi: 8, per: 6, ratio: 0.75, extra: 8 }
+];
+function tierCands(m, T) {
+  const out = [];
+  const mk = marketsOf(m);
+  const add = (type, d, label) => { if (d && num(d.pct) !== null && num(d.odd) !== null && d.odd >= T.lo && d.odd <= T.hi) out.push({ m, type, k: d.k, label: label || d.pick, pct: d.pct, odd: d.odd, calc: !!d.calc }); };
+  if (T.any) {
+    for (const [type, list] of Object.entries(mk)) for (const d of list) if (d.pct >= 20) add(type, d);
+    return out;
+  }
+  const b = bestSide(m);
+  if (b && b.pct >= T.win && b.odd) add("win", { k: b.k, pct: b.pct, odd: b.odd }, b.label);
+  for (const d of mk.dc) if (d.pct >= T.dc) add("dc", d);
+  const o15 = mk.goals.find((d) => d.k === "O1.5"), o25 = mk.goals.find((d) => d.k === "O2.5"), gg = mk.btts.find((d) => d.k === "GG");
+  if (o15 && o15.pct >= T.o15) add("goals", o15);
+  if (o25 && o25.pct >= T.o25) add("goals", o25);
+  if (gg && gg.pct >= T.gg) add("btts", gg);
+  return out;
+}
+function accaFromTier(matches, target, cap, T) {
+  const cands = matches.flatMap((m) => tierCands(m, T));
+  const legs = [], usedMatch = new Set(), perLeague = new Map(), perType = {};
+  let total = 1;
+  while (legs.length < cap && total < target) {
+    let best = null, bestScore = -1e9;
+    for (const c of cands) {
+      if (usedMatch.has(c.m.id) || (perLeague.get(c.m.league.id) || 0) >= T.per) continue;
+      const score = c.pct - (T.any ? 0 : 7 * (perType[c.type] || 0));
+      if (score > bestScore) { best = c; bestScore = score; }
+    }
+    if (!best) break;
+    legs.push({ m: best.m, k: best.k, label: best.label, pct: best.pct, odd: best.odd, calc: !!best.calc, type: best.type });
+    usedMatch.add(best.m.id);
+    perLeague.set(best.m.league.id, (perLeague.get(best.m.league.id) || 0) + 1);
+    perType[best.type] = (perType[best.type] || 0) + 1;
+    total *= best.odd;
+  }
+  if (legs.length < 2 || total < target * T.ratio) return null;
+  legs.sort((x, y) => x.m.ts - y.m.ts);
+  return { legs, total };
+}
+export function buildAccaSure(matches, target, maxLegs) {
+  const strict = buildAcca(matches, target, maxLegs);
+  if (strict) return { ...strict, tier: 0 };
+  const base = Math.max(maxLegs || 0, target <= 2 ? 4 : target <= 3 ? 5 : target <= 5 ? 7 : 12);
+  const days = [...new Set(matches.map((m) => dayKey(m.ts)))].sort();
+  for (let i = 0; i < ACCA_TIERS.length; i++) {
+    const T = ACCA_TIERS[i], cap = base + T.extra;
+    for (const d of days) {
+      const r = accaFromTier(matches.filter((m) => dayKey(m.ts) === d), target, cap, T);
+      if (r) return { ...r, day: d, tier: i + 1 };
+    }
+    const r = accaFromTier(matches, target, cap, T);
+    if (r) return { ...r, day: null, tier: i + 1 };
+  }
+  return null;
 }

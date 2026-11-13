@@ -235,7 +235,7 @@
       });
       const ps = el.dataset.pk ? judge(el.dataset.pk, h, a, state === "ft") : null;
       const chip = $(".pst", el);
-      if (chip) { chip.hidden = false; chip.className = "pst " + (ps || "pend"); chip.textContent = ps ? PICK_TXT[ps] : state === "wait" ? "Started" : "Pending"; }
+      if (chip) { chip.hidden = false; chip.className = "pst " + (ps || "pend"); chip.textContent = ps ? PICK_TXT[ps] : state === "wait" ? (label === "LIVE" ? "In play" : "Score updating") : "Pending"; }
       const mp = $(".odd.mp", el);
       if (mp) { mp.classList.toggle("won", ps === "won"); mp.classList.toggle("lost", ps === "lost"); }
     });

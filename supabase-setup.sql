@@ -50,3 +50,16 @@ create table if not exists standings_snapshot (
   primary key (league_id, snap_day)
 );
 alter table standings_snapshot enable row level security;   -- locked: only the server's service key can read/write
+
+-- Accumulator slips: one row per bet size per day (the automatic slip once a game has started, or a hand-made one from /admin).
+create table if not exists acca_slips (
+  day        text not null,                  -- site-timezone date, e.g. 2026-11-13
+  slug       text not null,                  -- e.g. acca-2-odds
+  mode       text not null default 'auto',   -- auto or manual
+  frozen     boolean not null default false,
+  tier       int not null default 0,
+  legs       jsonb not null default '[]',
+  updated_at timestamptz default now(),
+  primary key (day, slug)
+);
+alter table acca_slips enable row level security;   -- locked: only the server's service key can read/write

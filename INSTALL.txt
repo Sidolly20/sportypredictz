@@ -1,0 +1,9 @@
+SportyPredictz - scores everywhere + accumulators that never fail + Admin page
+Files inside: logic.js, views.js, app.js, styles.css, server.js, accas.js (new), supabase-setup.sql
+These REPLACE the files from the first scores fix, so use this zip (not both).
+
+1. Unzip. Copy all files from the "sportypredictz-main" folder into your site's main folder (next to package.json). Replace when asked.
+2. Render > your site > Environment: add ADMIN_PASSWORD = a long password only you know. Save.
+3. (Optional but recommended) Supabase > SQL Editor: paste all of supabase-setup.sql and Run. It is safe to run again. This lets the day's slips and your hand-picked slips survive a restart.
+4. Commit and push to GitHub. Render redeploys by itself.
+5. Open yoursite/admin and log in.

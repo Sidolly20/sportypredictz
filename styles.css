@@ -1903,3 +1903,33 @@ h3 { font-family: var(--display); }
 .sb-screen { min-height: min(calc(100dvh - 24px), 620px); }
 .wrap { overflow-x: clip; }
 .search input { width: 100%; }
+
+/* ---- v5.2: scores on every card, league rows and the match page header ---- */
+.lgb-teams .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lgb-teams .sc { display: none; margin-left: auto; min-width: 22px; height: auto; padding: 0; background: none; border: 0; box-shadow: none; border-radius: 0; font-size: 1rem; text-align: right; }
+.lgb-fx[data-state="live"] .sc, .lgb-fx[data-state="ft"] .sc, .lgb-fx[data-state="wait"] .sc { display: inline-block; }
+.lgb-fx[data-state="live"] .lgb-time, .lgb-fx[data-state="wait"] .lgb-time { color: var(--hot); }
+.lgb-fx[data-state="wait"] .lgb-time, .lgb-fx[data-state="ft"] .lgb-time { font-size: .74rem; }
+.lgb-fx[data-state="pre"] .pst { display: none; }
+.lgb-pick .pst { margin-left: 8px; }
+.mh5-live { display: none; }
+.mh5-board[data-state="live"] .mh5-live, .mh5-board[data-state="ft"] .mh5-live, .mh5-board[data-state="wait"] .mh5-live { display: block; }
+.mh5-board[data-state="live"] .mh5-ko-wrap, .mh5-board[data-state="ft"] .mh5-ko-wrap, .mh5-board[data-state="wait"] .mh5-ko-wrap { display: none; }
+.mh5-live .sc { display: inline; min-width: 0; height: auto; padding: 0; margin: 0; background: none; border: 0; box-shadow: none; border-radius: 0; font: inherit; color: inherit; }
+.mh5-board[data-state="live"] .mh5-live { color: var(--hot); }
+.mh5-board[data-state="live"] small.w-top { color: var(--hot); }
+
+/* ---- v5.2: accumulator legs show live sign, score and result ---- */
+.leg .legr { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+.leg .legr i { font-style: normal; color: var(--mute); }
+.leg .legr .sc { display: none; margin: 0; min-width: 0; height: auto; padding: 0; background: none; border: 0; box-shadow: none; border-radius: 0; font-size: .95rem; color: var(--text); }
+.leg .legr i { display: none; }
+.leg[data-state="live"] .legr .sc, .leg[data-state="ft"] .legr .sc, .leg[data-state="wait"] .legr .sc { display: inline; }
+.leg[data-state="live"] .legr i, .leg[data-state="ft"] .legr i, .leg[data-state="wait"] .legr i { display: inline; }
+.leg[data-state="live"] .legr .sc, .leg[data-state="live"] .w-top { color: var(--hot); }
+.leg .legr .pst { margin-left: 6px; }
+.leg[data-state="pre"] .pst { display: none; }
+.acca-note { margin: 4px 0 10px; color: var(--mute); font-size: .82rem; }
+.leg { grid-template-columns: 52px minmax(0, 1fr) auto auto; gap: 8px; }
+.leg .legt .w-top { font-size: .72rem; text-align: center; }
+.leg[data-state="pre"] .legr { display: none; }
