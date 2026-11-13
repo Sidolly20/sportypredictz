@@ -14,7 +14,7 @@ import { dayKey, todayKey, addDays, matchPath, leaguePath, parseLeagueSlug, byLe
 import { CATEGORIES, CAT_BY_SLUG, PAGES, TEAMS, TEAM_BY_SLUG } from "./content.js";
 import * as V from "./views.js";
 import { logPicks, settleFinished, status as logStatus, LOG_ON } from "./pickLog.js";
-import { storeStatus, startStoreJanitor, loadSnapshotNear } from "./store.js";
+import { storeStatus, startStoreJanitor, loadSnapshotNear, loadMatchesBetween } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -69,12 +69,32 @@ const ASSET_V = crypto.createHash("md5")
   .update(fs.readFileSync(path.join(__dirname, "app.js")))
   .digest("hex").slice(0, 8);
 
-const seenLeagues = new Map(); // keeps league pages alive on days without matches
+// Leagues we have seen. Kept in memory, in a small file, and rebuilt from the stored matches in Supabase
+// (when it is connected), so popular leagues stay listed after a restart or on days with no fixtures.
+const seenLeagues = new Map();
+const LEAGUE_FILE = path.join(__dirname, ".league-cache.json");
+try { for (const l of JSON.parse(fs.readFileSync(LEAGUE_FILE, "utf8"))) if (l && l.id != null) seenLeagues.set(l.id, l); } catch { /* first run */ }
+let leagueFileAt = 0;
+function saveLeagueFile() {
+  if (Date.now() - leagueFileAt < 60000) return;
+  leagueFileAt = Date.now();
+  fs.writeFile(LEAGUE_FILE, JSON.stringify([...seenLeagues.values()]), () => {});
+}
+async function warmLeagues() {
+  try {
+    const list = await loadMatchesBetween(dayKey(Date.now() - 14 * 864e5), dayKey(Date.now() + 7 * 864e5));
+    for (const m of list) if (m.league && m.league.id != null && !seenLeagues.has(m.league.id)) seenLeagues.set(m.league.id, { id: m.league.id, name: m.league.name, logo: m.league.logo || null });
+    saveLeagueFile();
+  } catch { /* the site works without it */ }
+}
+warmLeagues();
+setInterval(warmLeagues, 60 * 60 * 1000).unref();
 
 const withTimeout = (p, ms, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
 
 function makeCtx(req, board, live) {
   for (const m of board.matches) if (m.league.id != null) seenLeagues.set(m.league.id, m.league);
+  saveLeagueFile();
   const leagues = [...seenLeagues.values()].sort(byLeague);
   const t = V.tickerHtml(live.matches || [], board.matches.filter((m) => !m.res || m.res.state === "pre"));
   return {

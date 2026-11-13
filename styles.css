@@ -1894,3 +1894,12 @@ h3 { font-family: var(--display); }
 .fx-t .sc { box-shadow: none; width: auto; height: auto; border-radius: 0; }
 .fx-t .sc::before, .fx-t .sc::after { display: none; }
 .pod-foot { margin-top: auto; padding-top: 14px; }
+
+/* ---- v5.1: slip page overflow fix, no forced full-screen gap ---- */
+.sb-widgets, .sb-steps { grid-template-columns: minmax(0, 1fr); }
+.sb-widget, .sb-calc2 label, .sb-step { min-width: 0; }
+.sb-calc2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sb-calc2 input, input, select, textarea { max-width: 100%; width: 100%; box-sizing: border-box; }
+.sb-screen { min-height: min(calc(100dvh - 24px), 620px); }
+.wrap { overflow-x: clip; }
+.search input { width: 100%; }

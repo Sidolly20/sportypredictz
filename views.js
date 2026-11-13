@@ -2,7 +2,7 @@
 
 import {
   esc, num, fmtOdd, pctTxt, initials, clock, longDate, shortDate, dayKey, todayKey, addDays, keyToTs,
-  matchPath, leaguePath, marketsOf, fairOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, pickState, PICK_TXT, topPick, PLAY_MS
+  matchPath, leaguePath, marketsOf, fairOf, MARKET_TABS, groupByLeague, bestSide, edgeOf, rankPicks, buildAcca, byLeague, leagueRank, pickState, PICK_TXT, topPick, PLAY_MS
 , kickLabel} from "./logic.js";
 import { CATEGORIES, CAT_BY_SLUG, HOME, PAGES, SITE_NAME, analysis, TEAMS, CONTACT } from "./content.js";
 import { sponsorFor, MEDIA_KIT, PLACEMENTS } from "./sponsors.js";
@@ -33,7 +33,7 @@ function sponsorSlot(slot) {
   if (s) {
     return `<aside class="ad ad-${slot}" data-slot="${slot}" aria-label="Sponsored"><a class="ad-link" href="${esc(s.url)}" target="_blank" rel="sponsored nofollow noopener">${s.logo ? `<img class="ad-logo" src="${esc(s.logo)}" alt="${esc(s.name)}" loading="lazy" width="96" height="48">` : ""}<span class="ad-copy"><b>${esc(s.name)}</b><span>${esc(s.tagline || "")}</span></span><span class="ad-cta">${esc(s.cta || "Visit")}</span></a><span class="ad-tag">Sponsored</span></aside>`;
   }
-  if (process.env.HIDE_AD_SLOTS) return "";
+  if (!process.env.SHOW_AD_SLOTS) return ""; // open slots stay hidden until you switch them on
   return `<aside class="ad ad-open ad-${slot}" data-slot="${slot}" aria-label="Advertising space"><a class="ad-link" href="/advertise"><span class="ad-copy"><b>Partner with SportyPredictz</b><span>${SLOT_COPY[slot] || ""}</span></span><span class="ad-cta">See placements</span></a><span class="ad-tag">Your brand here</span></aside>`;
 }
 const MKX_LBL = { "1x2": "Match result", goals: "Goals", btts: "Both teams to score", dc: "Double chance" };
@@ -910,9 +910,13 @@ export function categoryPage(ctx, { cat, matches }) {
 }
 
 export function leaguesPage(ctx, { leagues, counts }) {
+  const card = (l) => { const n = counts.get(l.id) || 0; return `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span><i title="${n} upcoming">${n || "·"}</i></a>`; };
+  const pop = leagues.filter((l) => leagueRank(l.name) < 100);
+  const rest = leagues.filter((l) => leagueRank(l.name) >= 100);
   const body = `${crumbs([["Home", "/"], ["Leagues", "/leagues"]])}
-  ${pageHead("Football leagues", "Pick a league for its table, upcoming matches and predictions.")}
-  <div class="leaguegrid big">${leagues.map((l) => `<a class="lgcard" href="${leaguePath(l)}">${lgIcon(l)}<span>${esc(l.name)}</span><i>${counts.get(l.id) || 0}</i></a>`).join("")}</div>
+  <header class="ph5"><h1>Football leagues</h1><p class="ph5-s">Pick a league for its table, upcoming matches, odds and predictions.</p></header>
+  ${pop.length ? `<section class="sec" aria-labelledby="h-pop"><div class="sec-h"><h2 id="h-pop">Popular leagues</h2></div><div class="leaguegrid big">${pop.map(card).join("")}</div></section>` : ""}
+  ${rest.length ? `<section class="sec" aria-labelledby="h-more"><div class="sec-h"><h2 id="h-more">${pop.length ? "More leagues and cups" : "All leagues"}</h2></div><div class="leaguegrid big">${rest.map(card).join("")}</div></section>` : ""}
   ${leagues.length ? "" : `<div class="empty">Leagues appear once matches are loaded.</div>`}`;
   return { title: `Football Leagues: Tables and Predictions | ${SITE_NAME}`, desc: "Browse football leagues with live tables, upcoming matches, odds and predictions.", path: "/leagues", body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Leagues", "/leagues"]])] };
 }
@@ -1918,8 +1922,7 @@ export function advertisePage(ctx) {
     <p>Every sponsor is labelled Sponsored, and links carry the rel="sponsored" tag that Google asks for on paid placements. Sponsors never change a prediction, a percentage or the track record. The model runs on odds and data, and a sponsor cannot touch it.</p>
     <p>SportyPredictz is for adults. Every page carries an 18+ notice and a responsible gambling message, and gambling brands must be licensed where they operate. We reserve the right to decline a brand.</p>
     <h2>What to send us</h2>
-    <p>Your brand name, the link you want visitors to land on, a short line of copy, a logo or banner in the size above, the dates you want, and the markets you serve. We will reply with availability and a price.</p></section>
-  ${sponsorSlot("top")}`;
+    <p>Your brand name, the link you want visitors to land on, a short line of copy, a logo or banner in the size above, the dates you want, and the markets you serve. We will reply with availability and a price.</p></section>`;
   const desc = "Advertise on SportyPredictz: top banner, in-feed, sidebar and match page placements for brands that want to reach football fans before kick-off.";
   return { title: `Advertise on SportyPredictz | Football Sponsorship`, desc, path, body, ld: [crumbLd(ctx.origin, [["Home", "/"], ["Advertise", path]]), pageLd(ctx, { name: "Advertise on SportyPredictz", desc, path })] };
 }

@@ -20,7 +20,7 @@
 ## Things only you can do
 - Fill the media kit in `sponsors.js` with real analytics numbers, or leave it null (those lines are hidden).
 - Confirm the sponsorship rules written on /advertise (licensed brands only, sponsors never change picks).
-- Set `HIDE_AD_SLOTS=1` on Render if you do not want the "Your brand here" cards visible yet.
+- Sponsor placeholders are now hidden. Add a sponsor in `sponsors.js` and it appears; set `SHOW_AD_SLOTS=1` on Render only if you want the "Your brand here" cards back.
 - In Search Console: submit /sitemap.xml, then look at "Crawled, currently not indexed". Thin, near-identical match pages are the usual cause. Pages with no prediction are already set to noindex.
 
 ## Honest limits
